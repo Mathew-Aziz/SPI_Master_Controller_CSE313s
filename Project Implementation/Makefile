@@ -15,7 +15,7 @@ WAVES     ?= 0
 # harness/examples/sv_only/Makefile  -> ../../..
 # changed project root from ../../.. to . since we moved the Makefile from harness/examples/sv_only/ to Project Implementation/
 PROJ_ROOT  ?= .
-HARNESS    ?= $(PROJ_ROOT)/tb
+HARNESS    ?= $(PROJ_ROOT)/harness
 STUDENT_TB ?= .
 
 # DUT sources (three-file golden RTL). The grader overrides DUT_SRCS to
