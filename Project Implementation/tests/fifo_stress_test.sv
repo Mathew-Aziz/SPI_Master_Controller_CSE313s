@@ -21,6 +21,8 @@ class fifo_stress_test;
 
     // TODO:
     // - Fill TX to depth 8 (R11), check TX_FULL in STATUS
+
+    
     // - Drain via transfers and verify ordering (R9)
     // - Fill RX to depth 8 without reading (R12), then read out and verify ordering (R10)
     // - Hit occupancy bins: empty,1,4,7,full for both FIFOs
