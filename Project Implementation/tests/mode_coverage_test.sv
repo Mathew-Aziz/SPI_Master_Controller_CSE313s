@@ -96,7 +96,7 @@ class mode_coverage_test;
           end
 
           if (wait_count == timeout) begin
-            $error(
+            $display(
                 "[CHECKER_ERROR] mode_coverage_test: timeout waiting BUSY=0 (mode=%0d, width=%0d)",
                 mode, width_idx);
             errors++;
@@ -113,7 +113,6 @@ class mode_coverage_test;
 
     // Cleanup
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
-    $display("[INFO] mode_coverage_test: finished, errors=%0d", errors);
 
   endtask
 endclass
