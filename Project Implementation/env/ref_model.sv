@@ -136,6 +136,26 @@ class spi_ref_model;
     end
   endtask
 
+  // ------------------------------------------------------------------
+  // Reset helper: applies spec-compliant reset sequence
+  // Spec Section 7.1: 
+  //   - PRESETn active-low asynchronous assertion
+  //   - Synchronous deassertion (internal synchronizer assumed)
+  //   - Minimum assertion: PRESETn held low for at least 2 PCLK cycles
+  // ------------------------------------------------------------------
+  task apply_reset(input int min_cycles = 2);
+    // Assert reset (active-low)
+    tb_top.PRESETn = 1'b0;
+
+    // Wait for min_cycles rising edges of PCLK (frequency-independent)
+    // This ensures reset is held for ≥2 PCLK cycles regardless of clock speed
+    repeat (min_cycles) @(posedge tb_top.PCLK);
+
+    // Deassert reset synchronously to PCLK (spec requirement)
+    tb_top.PRESETn = 1'b1;
+    @(posedge tb_top.PCLK);  // Sync deassert to clock edge
+  endtask
+
 endclass
 
 `endif  // SPI_REF_MODEL_SV

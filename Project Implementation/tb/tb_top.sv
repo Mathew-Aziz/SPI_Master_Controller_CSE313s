@@ -18,6 +18,7 @@
 `include "sequences/stim_lib.sv"
 `include "tests/sanity_test.sv"
 `include "tests/randomized_sanity_test.sv"
+`include "tests/mode_coverage_test.sv"
 `include "tests/ral_hw_reset_test.sv"
 
 module tb_top;
@@ -37,10 +38,11 @@ module tb_top;
 
   // Local signals used only by the slave BFM
   logic [ 1:0] bfm_mode = 2'b00;
-  logic [ 7:0] bfm_pattern = 8'hA5;  // legacy (still usable)
-  logic [31:0] bfm_miso_word = 32'h0000_00A5;  // preferred response word
+  logic [ 7:0] bfm_pattern = 8'hA5;
+  // added for sanity test
+  logic [31:0] bfm_miso_word = 32'hA5A5_A5A5;
   logic        bfm_lsb_first = 1'b0;
-  logic [ 1:0] bfm_width = 2'b00;  // 00=8,01=16,10=32
+  logic [ 1:0] bfm_width = 2'b00;
 
   // ----------------- DUT wrapper -----------------------------------------
   dut_wrapper u_wrap (
@@ -92,6 +94,7 @@ module tb_top;
     case (testname)
       "sanity_test":            sanity_test::run(u_ref, u_cov);
       "randomized_sanity_test": randomized_sanity_test::run(u_ref, u_cov);
+      "mode_coverage_test":     mode_coverage_test::run(u_ref, u_cov);
       "ral_hw_reset_test": begin
         // SV-only scaffold does not implement the RAL bonus.
         // Emit the TEST_SKIPPED line so the grader can award 0 for
