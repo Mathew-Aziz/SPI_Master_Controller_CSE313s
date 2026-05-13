@@ -106,6 +106,13 @@ class clk_div_corner_test;
       ref_model.pop_rx();
       void'(tb_top.apb.read(APB_RX_DATA));
       coverage.sample_div(div_value);
+
+      // Clean up: deassert SS
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
+      @(posedge tb_top.PCLK); 
+
+      // Reassert SS before sending new TX word for the next iteration
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
     end
 
     // ---------------------------------------------------------
@@ -114,7 +121,7 @@ class clk_div_corner_test;
     int old_div_value = 1;
     tb_top.apb.write(APB_CLK_DIV, old_div_value);
     tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    if (!wait_for_busy_clear(2_500_000)) errors++; 
+    if (!wait_for_busy_clear(2_500_000)) errors++;
 
     int new_div_value = 10;
     tb_top.apb.write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
