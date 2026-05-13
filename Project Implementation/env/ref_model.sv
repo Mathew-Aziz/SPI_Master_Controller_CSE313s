@@ -107,9 +107,10 @@ class spi_ref_model;
       error_count++;
     end
   endtask
+
   // ------------------------------ FIFO checks -------------------------------
 // Verify TX FIFO contents match expected order
-task verify_fifo_order(input bit [31:0] expected_queue[$]);
+task verify_tx_fifo_order(input bit [31:0] expected_queue[$]);
   bit [31:0] tx_ptr_base = tb_top.u_wrap.u_dut.u_regfile.tx_rp;
   
   for(int i = 0; i < expected_queue.size(); i++) begin
