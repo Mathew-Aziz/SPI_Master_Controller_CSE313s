@@ -102,6 +102,12 @@ class clk_div_corner_test;
     rx_data = tb_top.u_apb_bfm.apb_read(APB_RX_DATA);
   endtask
 
+  static task cleanup();
+    // Deassert all slave selects
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
+    @(posedge tb_top.PCLK);
+  endtask
+
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // TODO:
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
@@ -124,7 +130,7 @@ class clk_div_corner_test;
     // ---------------------------------------------------------
     // --- Phase 2: Corner Cases ---
     // ---------------------------------------------------------
-    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int  div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
     byte rx_data;
 
     foreach (div_corners[i]) begin
@@ -147,9 +153,7 @@ class clk_div_corner_test;
       ref_model.pop_rx();
       coverage.sample_div(div_value);
 
-      // Deassert SS and reassert for next iteration
-      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
-      @(posedge tb_top.PCLK);
+      cleanup();
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
     end
 
@@ -164,7 +168,7 @@ class clk_div_corner_test;
     // ---------------------------------------------------------
     // --- Phase 4: Cleanup ---
     // ---------------------------------------------------------
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
+    cleanup();
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
   endtask
 
