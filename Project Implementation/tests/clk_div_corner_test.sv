@@ -22,7 +22,7 @@ class clk_div_corner_test;
     wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
 
     @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
-    while (tb_top.spi.sclk == 1) begin
+    while (tb_top.u_wrap.u_dut.u_core.sclk == 1) begin
       @(posedge tb_top.PCLK);
       count++;
       if (count >= timeout) begin
@@ -59,9 +59,9 @@ class clk_div_corner_test;
     tb_top.bfm_pattern = EDGE_DETECTION_PATTERN;
 
     // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
-    tb_top.apb.write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
-    tb_top.apb.write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
-    tb_top.apb.write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
+    tb_top.u_apb_bfm.apb_write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
 
     // ---------------------------------------------------------
     // --- Phase 2: Corner Cases ---
@@ -71,13 +71,13 @@ class clk_div_corner_test;
 
     foreach (div_corners[i]) begin
       int div_value = div_corners[i];
-      tb_top.apb.write(APB_CLK_DIV, div_value);
+      tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, div_value);
 
       ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
-      tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
 
       int poll_count = 0;
-      while ((tb_top.apb.read(
+      while ((tb_top.u_apb_bfm.apb_read(
           APB_STATUS
       ) & 32'h1) == 1) begin
         @(posedge tb_top.PCLK);
@@ -103,7 +103,7 @@ class clk_div_corner_test;
 
       // Drain RX & Sample Coverage
       ref_model.pop_rx();
-      void'(tb_top.apb.read(APB_RX_DATA));
+      void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
       coverage.sample_div(div_value);
 
       // Clean up: deassert SS
@@ -118,12 +118,12 @@ class clk_div_corner_test;
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
     // ---------------------------------------------------------
     int old_div_value = 1;
-    tb_top.apb.write(APB_CLK_DIV, old_div_value);
-    tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, old_div_value);
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
     if (!wait_for_busy_clear(2_500_000)) errors++;
 
     int new_div_value = 10;
-    tb_top.apb.write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
 
     // Check Current Transfer
     int mid_period;
@@ -134,13 +134,13 @@ class clk_div_corner_test;
       errors++;
     end
     // Cleanup
-    void'(tb_top.apb.read(APB_RX_DATA));
+    void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
     ref_model.pop_rx();
 
     // Check Next Transfer
-    tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
     int poll_count_r25 = 0;
-    while ((tb_top.apb.read(
+    while ((tb_top.u_apb_bfm.apb_read(
         APB_STATUS
     ) & 32'h1) == 1) begin
       @(posedge tb_top.PCLK);
@@ -156,14 +156,14 @@ class clk_div_corner_test;
       errors++;
     end
 
-    void'(tb_top.apb.read(APB_RX_DATA));
+    void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
     ref_model.pop_rx();
     coverage.sample_div_mid_update();
 
     // ---------------------------------------------------------
     // --- Phase 4: Cleanup ---
     // ---------------------------------------------------------
-    tb_top.apb.write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
     ref_model.error_count = errors;
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
   endtask
