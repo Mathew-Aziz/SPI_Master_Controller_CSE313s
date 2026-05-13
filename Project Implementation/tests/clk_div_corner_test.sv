@@ -45,7 +45,14 @@ class clk_div_corner_test;
     return 0;  // timeout
   endfunction
 
-
+  static function int wait_for_busy_set(int timeout = 100_000);
+    for (int i = 0; i < timeout; i++) begin
+      @(posedge tb_top.PCLK);
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) return 1;
+    end
+    $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=1");
+    return 0;
+  endfunction
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // TODO:
@@ -111,7 +118,7 @@ class clk_div_corner_test;
     int old_div_value = 1;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, old_div_value);
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
+    if (!wait_for_busy_set(TIMEOUT_CYCLES)) ref_model.error_count++;
 
     int new_div_value = 10;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV,
