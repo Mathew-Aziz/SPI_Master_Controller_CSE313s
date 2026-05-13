@@ -78,6 +78,7 @@ class clk_div_corner_test;
 
       ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
       tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+      @(posedge tb_top.PCLK);
 
       int poll_count = 0;
       while ((tb_top.u_apb_bfm.apb_read(
@@ -142,6 +143,8 @@ class clk_div_corner_test;
 
     // Check Next Transfer
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+    @(posedge tb_top.PCLK);
+    
     int poll_count_r25 = 0;
     while ((tb_top.u_apb_bfm.apb_read(
         APB_STATUS
