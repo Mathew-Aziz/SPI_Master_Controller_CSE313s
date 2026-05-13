@@ -91,6 +91,17 @@ class clk_div_corner_test;
     end
   endtask
 
+  static task send_byte_and_wait(input byte tx_data, output byte rx_data,
+                                 input int timeout = TIMEOUT_CYCLES);
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_data);
+    @(posedge tb_top.PCLK);
+    if (!wait_for_busy_clear(timeout)) begin
+      rx_data = 0;
+      return;
+    end
+    rx_data = tb_top.u_apb_bfm.apb_read(APB_RX_DATA);
+  endtask
+
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // TODO:
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
@@ -114,21 +125,17 @@ class clk_div_corner_test;
     // --- Phase 2: Corner Cases ---
     // ---------------------------------------------------------
     int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    byte rx_data;
 
     foreach (div_corners[i]) begin
       int div_value = div_corners[i];
+
       tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, div_value);
-
       ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
-      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-      @(posedge tb_top.PCLK);
+      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data);
 
-      if (!wait_for_busy_clear(TIMEOUT_CYCLES)) begin
-        ref_model.error_count++;
-      end
-
-      // Compare expected and measured
-      int measured_period = measure_sclk_period(MEASURE_TIMEOUT, measured_period);
+      // Measure SCLK period
+      int measured_period = measure_sclk_period();
       int expected_period = 2 * (div_value + 1);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
@@ -136,16 +143,13 @@ class clk_div_corner_test;
         ref_model.error_count++;
       end
 
-      // Drain RX & Sample Coverage
+      // Drain RX from reference model and sample coverage
       ref_model.pop_rx();
-      void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
       coverage.sample_div(div_value);
 
-      // Clean up: deassert SS
+      // Deassert SS and reassert for next iteration
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
       @(posedge tb_top.PCLK);
-
-      // Reassert SS before sending new TX word for the next iteration
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
     end
 
