@@ -11,6 +11,8 @@ localparam [7:0] APB_SS_CTRL = 8'h14;
 localparam [7:0] APB_INT_EN = 8'h18;
 localparam [7:0] APB_INT_STAT = 8'h1C;
 localparam [7:0] APB_DELAY = 8'h20;
+localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+
 
 class clk_div_corner_test;
 
@@ -40,8 +42,8 @@ class clk_div_corner_test;
       int div_value = div_corners[i];
       tb_top.apb_write(APB_CLK_DIV, div_value);
 
-      ref_model.predict_transfer(.tx_word(8'hA5), .width(8));
-      tb_top.apb_write(APB_TX_DATA, 8'hA5);
+      ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
+      tb_top.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
 
       int poll_count = 0;
       while ((tb_top.apb.read(
@@ -87,17 +89,74 @@ class clk_div_corner_test;
     end
 
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
+    int old_div_value = 1;
+    tb_top.apb.write(APB_CLK_DIV, div_value);
+    tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+    wait ((tb_top.apb.read(APB_STATUS) & 32'h1) == 1);  // wait busy = 1
 
+    int new_div_value = 10;
+    tb.top.apb.write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
 
+    // Check Current Transfer
+    int mid_period = 0;
+    wait (tb_top.spi.sclk == 0);
 
+    @(posedge tb_top.spi.sclk);
+    while (tb_top.spi.sclk != 1) begin
+      @(posedge tb_top.PCLK);
+      mid_period++;
+
+      if (mid_period > 5000)  // Timeout
+        break;
+    end
+
+    if (mid_period != 2 * (old_div_value + 1)) begin
+      $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
+               mid_period);
+      errors++;
+    end
+    // Cleanup
+    void'(tb_top.apb.read(APB_RX_DATA));
+    ref_model.pop_rx();
+
+    // Check Next Transfer
+    tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+    int poll_count = 0;
+    while ((tb_top.apb.read(
+        APB_STATUS
+    ) & 32'h1) == 1) begin
+      @(posedge tb_top.PCLK);
+      if (++poll_count == 500_000) break;
+    end
+
+    int next_period = 0;
+    wait (tb_top.spi.sclk == 0);
+
+    @(posedge tb_top.spi.sclk);
+    while (tb_top.spi.sclk != 1) begin
+      @(posedge tb_top.PCLK);
+      next_period++;
+
+      if (next_period > 5000) break;
+    end
+
+    if (next_period != 2 * (new_div_value + 1)) begin
+      $display(
+          "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
+          next_period);
+      errors++;
+    end
+
+    void'(tb_top.apb.read(APB_RX_DATA));
+    ref_model.pop_rx();
+    coverage.sample_div_mid_update();
 
     // --- Phase 4: Cleanup ---
 
-      tb_top.apb.write(APB_SS_CTRL, 32'h0000_0000); // Deasserts SS
-      ref_model.error_count = errors;
-      $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
+    tb_top.apb.write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
+    ref_model.error_count = errors;
+    $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
   endtask
 
 endclass
-
 `endif
