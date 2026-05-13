@@ -66,10 +66,9 @@ class fifo_stress_test;
       end
     end
 
-
     //* - Drain via transfers and verify ordering (R9)
+    verify_tx_fifo_order(ref_model, TX_q);  // Check ordering
   
-
     //* - Fill RX to depth 8 without reading (R12), then read out and verify ordering (R10)
     
     

@@ -107,6 +107,57 @@ class spi_ref_model;
       error_count++;
     end
   endtask
+  // ------------------------------ FIFO checks -------------------------------
+// Verify TX FIFO contents match expected order
+task verify_fifo_order(input bit [31:0] expected_queue[$]);
+  bit [31:0] tx_ptr_base = tb_top.u_wrap.u_dut.u_regfile.tx_rp;
+  
+  for(int i = 0; i < expected_queue.size(); i++) begin
+    int fifo_idx = (tx_ptr_base + i) & 3'h7;  // wrap at 8
+    bit [31:0] actual = tb_top.u_wrap.u_dut.u_regfile.tx_mem[fifo_idx];
+    
+    if(actual !== expected_queue[i]) begin
+      $display("[SCOREBOARD_ERROR] TX_FIFO[%d] (mem[%d]) = 0x%08h, expected 0x%08h",
+               i, fifo_idx, actual, expected_queue[i]);
+      error_count++;
+    end
+  end
+endtask
+
+// Check TX STATUS flags with meaningful names
+task check_tx_status(input [31:0] status, input bit expect_full, expect_empty, expect_busy);
+  bit tx_full  = status[1];
+  bit tx_empty = status[2];
+  bit busy     = status[0];
+  
+  if(tx_full !== expect_full) begin
+    $display("[SCOREBOARD_ERROR] TX_FULL=%b, expected=%b", tx_full, expect_full);
+    error_count++;
+  end
+  if(tx_empty !== expect_empty) begin
+    $display("[SCOREBOARD_ERROR] TX_EMPTY=%b, expected=%b", tx_empty, expect_empty);
+    error_count++;
+  end
+  if(busy !== expect_busy) begin
+    $display("[SCOREBOARD_ERROR] BUSY=%b, expected=%b", busy, expect_busy);
+    error_count++;
+  end
+endtask
+
+// Check TX STATUS flags with meaningful names
+task check_rx_status(input bit [31:0] status, input bit expect_full, expect_empty);
+  bit rx_full  = status[3];
+  bit rx_empty = status[4];
+  
+  if(rx_full !== expect_full) begin
+    $display("[SCOREBOARD_ERROR] RX_FULL=%b, expected=%b", rx_full, expect_full);
+    error_count++;
+  end
+  if(rx_empty !== expect_empty) begin
+    $display("[SCOREBOARD_ERROR] RX_EMPTY=%b, expected=%b", rx_empty, expect_empty);
+    error_count++;
+  end
+endtask
 
   // ------------------------- Spec edge-case checks --------------------------
   task check_reserved_read_zero(input [7:0] addr, input [31:0] observed);
