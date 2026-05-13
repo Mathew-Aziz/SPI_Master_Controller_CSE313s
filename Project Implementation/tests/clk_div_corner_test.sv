@@ -16,7 +16,10 @@ localparam [7:0] APB_DELAY = 8'h20;
 localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 localparam int TIMEOUT_CYCLES = 2_500_000;
 localparam int MEASURE_TIMEOUT = 200_000;
+localparam MID_MEASURE_TIMEOUT = 5_000;
 localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
+localparam SS_EN0 = 32'h0000_0001;
+localparam SS_DISABLE = 32'h0000_0000;
 
 class clk_div_corner_test;
 
@@ -67,7 +70,7 @@ class clk_div_corner_test;
                                new_div_value);  // Write new DIV while transfer is active
 
     // Check Current Transfer
-    int mid_period = measure_sclk_period(5000, mid_period);
+    int mid_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
@@ -82,7 +85,7 @@ class clk_div_corner_test;
     @(posedge tb_top.PCLK);
     if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
 
-    int next_period = measure_sclk_period(5000, next_period);
+    int next_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
     if (next_period != 2 * (new_div_value + 1)) begin
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
@@ -104,7 +107,7 @@ class clk_div_corner_test;
 
   static task cleanup();
     // Deassert all slave selects
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_DISABLE);
     @(posedge tb_top.PCLK);
   endtask
 
@@ -124,8 +127,8 @@ class clk_div_corner_test;
 
     // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
     tb_top.u_apb_bfm.apb_write(APB_CTRL, CTRL_DEFAULT);  // EN=1, MSTR=1, MODE=0, WIDTH=8
-    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, SS_DISABLE);  // DIV=0 baseline
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);  // SS_EN[0]=1, SS_VAL[0]=0
 
     // ---------------------------------------------------------
     // --- Phase 2: Corner Cases ---
@@ -154,7 +157,7 @@ class clk_div_corner_test;
       coverage.sample_div(div_value);
 
       cleanup();
-      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
     end
 
     // ---------------------------------------------------------
