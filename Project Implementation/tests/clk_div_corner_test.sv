@@ -68,7 +68,7 @@ class clk_div_corner_test;
     // --- Phase 2: Corner Cases ---
     // ---------------------------------------------------------
     int errors = 0;
-    int div_corners[$] = '{0, 1, 8, 1024, 65535};
+    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
 
     foreach (div_corners[i]) begin
       int div_value = div_corners[i];
