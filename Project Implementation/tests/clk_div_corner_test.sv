@@ -86,15 +86,16 @@ class clk_div_corner_test;
       coverage.sample_div(div_val);
     end
 
-    // Optional R25 — Sampled-at-Start Behavior
-    
-
-
-    // Teardown and Reporting
+    // --- Phase 3: R25 Mid-Transfer DIV Update ---
 
 
 
-    $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
+
+    // --- Phase 4: Cleanup ---
+
+      tb_top.apb.write(APB_SS_CTRL, 32'h0000_0000); // Deasserts SS
+      ref_model.error_count = errors;
+      $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
   endtask
 
 endclass
