@@ -27,19 +27,70 @@ class clk_div_corner_test;
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
 
-    apb.write(APB_CTRL,
-              32'h0000_0003);  // Program CTRL: EN=1, MSTR=1, MODE=0, WIDTH=8, LSB_FIRST=0
-    apb.write(APB_SS_CTRL, 32'h0000_0001);  // Assert SS[0]
+    // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
+    tb_top.apb.write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
+    tb_top.apb.write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
+    tb_top.apb.write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
 
-    // Corner-Case DIV Verification Loop
+    // --- Phase 2: Corner Cases ---
+    int errors = 0;
+    int div_corners[$] = '{0, 1, 8, 1024, 65535};
 
+    foreach (div_corners[i]) begin
+      int div_value = div_corners[i];
+      tb_top.apb_write(APB_CLK_DIV, div_value);
 
+      ref_model.predict_transfer(.tx_word(8'hA5), .width(8));
+      tb_top.apb_write(APB_TX_DATA, 8'hA5);
+
+      int poll_count = 0;
+      while ((tb_top.apb.read(
+          APB_STATUS
+      ) & 32'h1) == 1) begin
+        @(posedge tb_top.PCLK);
+        poll_count++;
+
+        if (poll_count > 500_000) begin
+          $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_val);
+          errors++;
+          break;
+        end
+      end
+
+      // Find measured PCLK period
+      wait (tb_top.spi.sclk == 0);
+      int measured_period = 0;
+      @(posedge tb_top.spi.sclk);  // sync
+      while (tb_top.spi.sclk != 1) begin
+        @(posedge tb_top.PCLK) measured_period++;
+
+        if (measured_period > 200_000) begin
+          $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout for DIV=%0d",
+                   div_val);
+          measured_period = -1;
+          break;
+        end
+      end
+
+      // Compare expected and measured
+      int expected_period = 2 * (div_val + 1);
+      if (expected_period != measured_period) begin
+        $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_val,
+                 expected_period, measured_period);
+        errors++;
+      end
+
+      // Drain RX & Sample Coverage
+      ref_model.pop_rx();
+      void'(tb_top.apb.read(APB_RX_DATA));
+      coverage.sample_div(div_val);
+    end
 
     // Optional R25 — Sampled-at-Start Behavior
+    
 
 
-
-    // Teardown and Reportinh
+    // Teardown and Reporting
 
 
 
