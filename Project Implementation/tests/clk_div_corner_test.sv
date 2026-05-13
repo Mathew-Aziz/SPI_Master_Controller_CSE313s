@@ -11,8 +11,11 @@ localparam [7:0] APB_SS_CTRL = 8'h14;
 localparam [7:0] APB_INT_EN = 8'h18;
 localparam [7:0] APB_INT_STAT = 8'h1C;
 localparam [7:0] APB_DELAY = 8'h20;
-localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 
+// Magic Numbers
+localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+localparam int TIMEOUT_CYCLES = 2_500_000;
+localparam int MEASURE_TIMEOUT = 200_000;
 
 class clk_div_corner_test;
 
@@ -83,7 +86,7 @@ class clk_div_corner_test;
         @(posedge tb_top.PCLK);
         poll_count++;
 
-        if (poll_count > 2_500_000) begin
+        if (poll_count > TIMEOUT_CYCLES) begin
           $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_value);
           errors++;
           break;
@@ -92,7 +95,7 @@ class clk_div_corner_test;
 
       // Compare expected and measured
       int measured_period;
-      measure_sclk_period(200_000, measured_period);
+      measure_sclk_period(MEASURE_TIMEOUT, measured_period);
 
       int expected_period = 2 * (div_value + 1);
       if (expected_period != measured_period) begin
@@ -120,7 +123,7 @@ class clk_div_corner_test;
     int old_div_value = 1;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, old_div_value);
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    if (!wait_for_busy_clear(2_500_000)) errors++;
+    if (!wait_for_busy_clear(TIMEOUT_CYCLES)) errors++;
 
     int new_div_value = 10;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
