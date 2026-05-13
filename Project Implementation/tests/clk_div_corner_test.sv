@@ -82,7 +82,6 @@ class clk_div_corner_test;
 
     // Check Next Transfer
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    @(posedge tb_top.PCLK);
     if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
 
     int next_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
@@ -92,6 +91,7 @@ class clk_div_corner_test;
           next_period);
       ref_model.error_count++;
     end
+    cleanup()
   endtask
 
   static task send_byte_and_wait(input byte tx_data, output byte rx_data,
