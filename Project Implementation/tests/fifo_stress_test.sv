@@ -48,7 +48,7 @@ class fifo_stress_test;
         if (rd[0] == 1'b0) break;
       end
       check_reg_masked("STATUS", APB_STATUS, 8'b0000_0100, rd, 8'b0000_0100);
-
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
     end
 
     // Push 8 bytes with reading TX_FULL flag, confirm STATUS.FULL (R11)
@@ -64,8 +64,8 @@ class fifo_stress_test;
       end else begin
         check_reg_masked("STATUS", APB_STATUS, 8'b0000_0000, rd, 8'b0000_0110); //FULL=0
       end
-
     end
+
 
     //* - Drain via transfers and verify ordering (R9)
   
