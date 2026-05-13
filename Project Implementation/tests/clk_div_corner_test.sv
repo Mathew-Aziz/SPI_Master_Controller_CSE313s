@@ -55,9 +55,8 @@ class clk_div_corner_test;
     // --- Phase 1: BFM & Register Init ---    
     // ---------------------------------------------------------
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
-    tb_top.bfm_width     = 2'b00;  // 8-bit
-    tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
+    tb_top.bfm_pattern = EDGE_DETECTION_PATTERN;
 
     // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
     tb_top.apb.write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
