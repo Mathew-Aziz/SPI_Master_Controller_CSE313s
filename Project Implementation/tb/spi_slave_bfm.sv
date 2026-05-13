@@ -47,6 +47,8 @@ module spi_slave_bfm (
   logic        last_lsb_first;
   logic [ 1:0] last_ss_lane;
 
+  int idx, dst;
+
   // -------------------------------- Init -----------------------------------
   initial begin
     spi.cb_slave.miso <= 1'b0;
@@ -63,6 +65,10 @@ module spi_slave_bfm (
 
   // ------------------------------ Main BFM ---------------------------------
   always @(posedge spi.pclk) begin
+
+    logic sclk_rise, sclk_fall;
+    logic do_shift, do_sample;
+
     // Width decode (safe default for reserved encoding)
     unique case (width)
       2'b00:   width_bits = 8;
@@ -80,12 +86,10 @@ module spi_slave_bfm (
       ss_n_q <= spi.ss_n;
     end else begin
       // Edge detection
-      logic sclk_rise, sclk_fall;
       sclk_rise = (sclk_q === 1'b0) && (spi.sclk === 1'b1);
       sclk_fall = (sclk_q === 1'b1) && (spi.sclk === 1'b0);
 
       // Decide shift vs sample edge (matches spec Table 4.1)
-      logic do_shift, do_sample;
 
       // Mode0: shift fall, sample rise
       // Mode1: shift rise, sample fall
@@ -99,27 +103,30 @@ module spi_slave_bfm (
         do_shift  = cpol ? sclk_fall : sclk_rise;
       end
 
-      // On SS assertion edge: initialize capture and drive first MISO bit
+      // On SS assertion edge: initialize state
       if (ss_n_q == 4'hF) begin
-        bit_count <= 0;
+        $display("[BFM] SS asserted: cpha=%0b cpol=%0b driving_first=%0b", cpha, cpol,
+                 (cpha == 1'b0));
+        bit_count  <= 0;
         mosi_accum <= '0;
-        spi.cb_slave.miso <= lsb_first ? miso_word[0] : miso_word[width_bits-1];
+        // CPHA=0: drive first bit now (before first SCLK edge)
+        // CPHA=1: drive idle level now, first bit driven on first launch edge
+        if (cpha == 1'b0) begin
+          spi.cb_slave.miso <= lsb_first ? miso_word[0] : miso_word[width_bits-1];
+        end else begin
+          spi.cb_slave.miso <= cpol;  // idle level until first edge
+        end
       end
 
-      // Drive MISO on shift edge (launch edge)
+      // Drive MISO on shift edge (launch edge) - FIXED: always use miso_word
       if (do_shift) begin
-        int idx;
         idx = lsb_first ? bit_count : (width_bits - 1 - bit_count);
-
-        // Minimal behavior: prefer miso_word bits; if you didn’t set it,
-        // fall back to repeating miso_byte for bits beyond [7:0].
-        if (idx < 8) spi.cb_slave.miso <= miso_word[idx];
-        else spi.cb_slave.miso <= miso_byte[idx%8];
+        $display("[BFM] Launch: bit=%0d idx=%0d miso=%0b", bit_count, idx, miso_word[idx]);
+        spi.cb_slave.miso <= miso_word[idx];  // idx is always < 32
       end
 
       // Capture MOSI on sample edge
       if (do_sample) begin
-        int dst;
         dst = lsb_first ? bit_count : (width_bits - 1 - bit_count);
         if (dst >= 0 && dst < 32) mosi_accum[dst] <= spi.mosi;
 

@@ -13,7 +13,8 @@ WAVES     ?= 0
 
 # Resolve the project root from this file's location.
 # harness/examples/sv_only/Makefile  -> ../../..
-PROJ_ROOT  ?= ../../..
+# changed project root from ../../.. to . since we moved the Makefile from harness/examples/sv_only/ to Project Implementation/
+PROJ_ROOT  ?= .
 HARNESS    ?= $(PROJ_ROOT)/harness
 STUDENT_TB ?= .
 
@@ -42,7 +43,7 @@ SEQ_SRCS   ?= \
   $(STUDENT_TB)/sequences/stim_lib.sv
 
 ASSERT_SRCS?= \
-  $(STUDENT_TB)/assertions/spi_sva.sv
+  $(STUDENT_TB)/assertions/abp_sva.sv
 
 # NOTE: test files (tests/*.sv) are NOT listed here on purpose.
 #
@@ -93,7 +94,9 @@ REGRESSION_SEEDS ?= 20   # 10 * 20 = 200 runs (well under the 10000 cap)
 ifeq ($(SIMULATOR),questa)
 
 VLOG_FLAGS  = -sv -timescale=1ns/1ps +acc=rn +define+SIM $(INC_DIRS)
-COV_FLAG    = -coverage +cover=bcestf
+# Questa version doesn't support -coverage flag during compilation (vlog). Coverage flags belong in simulation (vsim) only.
+COV_FLAG    = #-coverage +cover=bcestf  # removed
+
 
 compile:
 	@mkdir -p build
