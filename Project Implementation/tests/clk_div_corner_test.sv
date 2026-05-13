@@ -20,22 +20,21 @@ localparam int MEASURE_TIMEOUT = 200_000;
 class clk_div_corner_test;
 
   // Helper: measure full SCLK period in PCLK cycles
-  static task measure_sclk_period(input int timeout, output int period);
+  static function int measure_sclk_period(int timeout = MEASURE_TIMEOUT);
     int count = 0;
     wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
 
     @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
     while (tb_top.u_wrap.u_dut.u_core.sclk == 1) begin
       @(posedge tb_top.PCLK);
-      count++;
-      if (count >= timeout) begin
+      if (++count > timeout) begin
         $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout");
-        period = -1;
-        return;
+        return -1;
       end
     end
-    period = 2 * count;
-  endtask
+
+    return 2 * count;
+  endfunction
 
   static function int wait_for_busy_clear(int timeout = 100_000);
     for (int i = 0; i < timeout; i++) begin
@@ -45,6 +44,7 @@ class clk_div_corner_test;
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=0");
     return 0;  // timeout
   endfunction
+
 
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
@@ -84,9 +84,7 @@ class clk_div_corner_test;
       end
 
       // Compare expected and measured
-      int measured_period;
-      measure_sclk_period(MEASURE_TIMEOUT, measured_period);
-
+      int measured_period = measure_sclk_period(MEASURE_TIMEOUT, measured_period);
       int expected_period = 2 * (div_value + 1);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
@@ -120,8 +118,7 @@ class clk_div_corner_test;
                                new_div_value);  // Write new DIV while transfer is active
 
     // Check Current Transfer
-    int mid_period;
-    measure_sclk_period(5000, mid_period);
+    int mid_period = measure_sclk_period(5000, mid_period);
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
@@ -143,8 +140,7 @@ class clk_div_corner_test;
       if (++poll_count_r25 >= 500_000) break;
     end
 
-    int next_period;
-    measure_sclk_period(5000, next_period);
+    int next_period = measure_sclk_period(5000, next_period);
     if (next_period != 2 * (new_div_value + 1)) begin
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
