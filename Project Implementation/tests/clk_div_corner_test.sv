@@ -127,7 +127,7 @@ class clk_div_corner_test;
         APB_STATUS
     ) & 32'h1) == 1) begin
       @(posedge tb_top.PCLK);
-      if (++poll_count_r25 == 500_000) break;
+      if (++poll_count_r25 >= 500_000) break;
     end
 
     int next_period;
