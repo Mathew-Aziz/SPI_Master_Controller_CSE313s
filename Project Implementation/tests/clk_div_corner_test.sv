@@ -23,7 +23,9 @@ class clk_div_corner_test;
 
     $display("[INFO] clk_div_corner_test: starting");
 
+    // ---------------------------------------------------------
     // --- Phase 1: BFM & Register Init ---    
+    // ---------------------------------------------------------
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
     tb_top.bfm_width     = 2'b00;  // 8-bit
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
@@ -34,16 +36,18 @@ class clk_div_corner_test;
     tb_top.apb.write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
     tb_top.apb.write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
 
+    // ---------------------------------------------------------
     // --- Phase 2: Corner Cases ---
+    // ---------------------------------------------------------
     int errors = 0;
     int div_corners[$] = '{0, 1, 8, 1024, 65535};
 
     foreach (div_corners[i]) begin
       int div_value = div_corners[i];
-      tb_top.apb_write(APB_CLK_DIV, div_value);
+      tb_top.apb.write(APB_CLK_DIV, div_value);
 
       ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
-      tb_top.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
+      tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
 
       int poll_count = 0;
       while ((tb_top.apb.read(
@@ -52,8 +56,8 @@ class clk_div_corner_test;
         @(posedge tb_top.PCLK);
         poll_count++;
 
-        if (poll_count > 500_000) begin
-          $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_val);
+        if (poll_count > 2_500_000) begin
+          $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_value);
           errors++;
           break;
         end
@@ -68,16 +72,16 @@ class clk_div_corner_test;
 
         if (measured_period > 200_000) begin
           $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout for DIV=%0d",
-                   div_val);
+                   div_value);
           measured_period = -1;
           break;
         end
       end
 
       // Compare expected and measured
-      int expected_period = 2 * (div_val + 1);
+      int expected_period = 2 * (div_value + 1);
       if (expected_period != measured_period) begin
-        $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_val,
+        $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);
         errors++;
       end
@@ -85,17 +89,19 @@ class clk_div_corner_test;
       // Drain RX & Sample Coverage
       ref_model.pop_rx();
       void'(tb_top.apb.read(APB_RX_DATA));
-      coverage.sample_div(div_val);
+      coverage.sample_div(div_value);
     end
 
+    // ---------------------------------------------------------
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
+    // ---------------------------------------------------------
     int old_div_value = 1;
-    tb_top.apb.write(APB_CLK_DIV, div_value);
+    tb_top.apb.write(APB_CLK_DIV, old_div_value);
     tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
     wait ((tb_top.apb.read(APB_STATUS) & 32'h1) == 1);  // wait busy = 1
 
     int new_div_value = 10;
-    tb.top.apb.write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
+    tb_top.apb.write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
 
     // Check Current Transfer
     int mid_period = 0;
@@ -121,12 +127,12 @@ class clk_div_corner_test;
 
     // Check Next Transfer
     tb_top.apb.write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    int poll_count = 0;
+    int poll_count_r25 = 0;
     while ((tb_top.apb.read(
         APB_STATUS
     ) & 32'h1) == 1) begin
       @(posedge tb_top.PCLK);
-      if (++poll_count == 500_000) break;
+      if (++poll_count_r25 == 500_000) break;
     end
 
     int next_period = 0;
@@ -151,8 +157,9 @@ class clk_div_corner_test;
     ref_model.pop_rx();
     coverage.sample_div_mid_update();
 
+    // ---------------------------------------------------------
     // --- Phase 4: Cleanup ---
-
+    // ---------------------------------------------------------
     tb_top.apb.write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
     ref_model.error_count = errors;
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
