@@ -54,7 +54,7 @@ class clk_div_corner_test;
       @(posedge tb_top.PCLK);
       if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) return 1;
     end
-    
+
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=1");
     return 0;
   endfunction
@@ -118,6 +118,12 @@ class clk_div_corner_test;
 
     // --- Phase 1: BFM & Register Init ---    
     $display("[INFO] clk_div_corner_test: starting");
+    // Reset Sequence
+    tb_top.PRESETn = 0;
+    repeat (5) @(posedge tb_top.PCLK);
+    tb_top.PRESETn = 1;
+    repeat (2) @(posedge tb_top.PCLK);
+
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
     tb_top.bfm_pattern   = EDGE_DETECTION_PATTERN;
