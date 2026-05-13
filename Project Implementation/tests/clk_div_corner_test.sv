@@ -59,7 +59,7 @@ class clk_div_corner_test;
     // ---------------------------------------------------------
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
-    tb_top.bfm_pattern = EDGE_DETECTION_PATTERN;
+    tb_top.bfm_pattern   = EDGE_DETECTION_PATTERN;
 
     // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
     tb_top.u_apb_bfm.apb_write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
@@ -69,7 +69,6 @@ class clk_div_corner_test;
     // ---------------------------------------------------------
     // --- Phase 2: Corner Cases ---
     // ---------------------------------------------------------
-    int errors = 0;
     int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
 
     foreach (div_corners[i]) begin
@@ -89,7 +88,7 @@ class clk_div_corner_test;
 
         if (poll_count > TIMEOUT_CYCLES) begin
           $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_value);
-          errors++;
+          ref_model.error_count++;
           break;
         end
       end
@@ -102,7 +101,7 @@ class clk_div_corner_test;
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);
-        errors++;
+        ref_model.error_count++;
       end
 
       // Drain RX & Sample Coverage
@@ -112,7 +111,7 @@ class clk_div_corner_test;
 
       // Clean up: deassert SS
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
-      @(posedge tb_top.PCLK); 
+      @(posedge tb_top.PCLK);
 
       // Reassert SS before sending new TX word for the next iteration
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
@@ -124,10 +123,11 @@ class clk_div_corner_test;
     int old_div_value = 1;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, old_div_value);
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
-    if (!wait_for_busy_clear(TIMEOUT_CYCLES)) errors++;
+    if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
 
     int new_div_value = 10;
-    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, new_div_value);  // Write new DIV while transfer is active
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV,
+                               new_div_value);  // Write new DIV while transfer is active
 
     // Check Current Transfer
     int mid_period;
@@ -135,7 +135,7 @@ class clk_div_corner_test;
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
-      errors++;
+      ref_model.error_count++;
     end
     // Cleanup
     void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
@@ -144,7 +144,7 @@ class clk_div_corner_test;
     // Check Next Transfer
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
     @(posedge tb_top.PCLK);
-    
+
     int poll_count_r25 = 0;
     while ((tb_top.u_apb_bfm.apb_read(
         APB_STATUS
@@ -159,7 +159,7 @@ class clk_div_corner_test;
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
           next_period);
-      errors++;
+      ref_model.error_count++;
     end
 
     void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
@@ -170,7 +170,6 @@ class clk_div_corner_test;
     // --- Phase 4: Cleanup ---
     // ---------------------------------------------------------
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // Deasserts SS
-    ref_model.error_count = errors;
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
   endtask
 
