@@ -79,18 +79,8 @@ class clk_div_corner_test;
       tb_top.u_apb_bfm.apb_write(APB_TX_DATA, EDGE_DETECTION_PATTERN);
       @(posedge tb_top.PCLK);
 
-      int poll_count = 0;
-      while ((tb_top.u_apb_bfm.apb_read(
-          APB_STATUS
-      ) & 32'h1) == 1) begin
-        @(posedge tb_top.PCLK);
-        poll_count++;
-
-        if (poll_count > TIMEOUT_CYCLES) begin
-          $display("[CHECKER_ERROR] clk_div_corner: BUSY timeout for DIV=%0d", div_value);
-          ref_model.error_count++;
-          break;
-        end
+      if (!wait_for_busy_clear(TIMEOUT_CYCLES)) begin
+        ref_model.error_count++;
       end
 
       // Compare expected and measured
