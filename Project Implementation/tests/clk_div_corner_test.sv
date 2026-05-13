@@ -16,6 +16,7 @@ localparam [7:0] APB_DELAY = 8'h20;
 localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 localparam int TIMEOUT_CYCLES = 2_500_000;
 localparam int MEASURE_TIMEOUT = 200_000;
+localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
 
 class clk_div_corner_test;
 
@@ -69,7 +70,7 @@ class clk_div_corner_test;
     tb_top.bfm_pattern   = EDGE_DETECTION_PATTERN;
 
     // Program baseline registers in safe order: CTRL → CLK_DIV → SS_CTRL
-    tb_top.u_apb_bfm.apb_write(APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, MODE=0, WIDTH=8
+    tb_top.u_apb_bfm.apb_write(APB_CTRL, CTRL_DEFAULT);  // EN=1, MSTR=1, MODE=0, WIDTH=8
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0000);  // DIV=0 baseline
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  // SS_EN[0]=1, SS_VAL[0]=0
 
