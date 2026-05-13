@@ -18,10 +18,11 @@ class clk_div_corner_test;
 
   // Helper: measure full SCLK period in PCLK cycles
   static task measure_sclk_period(input int timeout, output int period);
-    wait (tb_top.spi.sclk == 0);
-    @(posedge tb_top.spi.sclk);
     int count = 0;
-    while (tb_top.spi.sclk != 1) begin
+    wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
+    
+    @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
+    while (tb_top.spi.sclk == 1) begin
       @(posedge tb_top.PCLK);
       count++;
       if (count >= timeout) begin
@@ -30,7 +31,7 @@ class clk_div_corner_test;
         return;
       end
     end
-    period = count;
+    period = 2* count;
   endtask
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
