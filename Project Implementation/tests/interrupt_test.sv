@@ -329,6 +329,19 @@ class interrupt_test;
     end
 
     //?================== RX_OVF IRQ test ====================
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable RX_OVF IRQ in INT_EN
+
+    //3. Fill RX FIFO to trigger RX_OVF condition
+
+    //4. Check INT_STAT for RX_OVF bit set twice to check sticky behavior
+
+    //5. Clear RX_OVF bit via W1C and confirm deassertion
+
+    //6. Mask RX_OVF IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted 
 
     $display("[INFO] interrupt_test: finished, errors=%0d", ref_model.error_count);
   endtask
