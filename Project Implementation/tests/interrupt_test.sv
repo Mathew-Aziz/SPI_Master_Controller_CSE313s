@@ -330,20 +330,70 @@ class interrupt_test;
 
     //?================== RX_OVF IRQ test ====================
     //1. W1C all IRQs in INT_STAT
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
 
     //2. Enable RX_OVF IRQ in INT_EN
-
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0008);
+    
     //3. Fill RX FIFO to trigger RX_OVF condition
+    //Empty RX FIFO by reading until empty
+    repeat (20) begin
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
 
+      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+    end
+
+     for (int i = 0; i <= 8; i++)
+      tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h1000_0000 + i;
+  
+    tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h9;
     //4. Check INT_STAT for RX_OVF bit set twice to check sticky behavior
+    
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      checker_error("Interrupt test", "RX_OVF IRQ not asserted when RX FIFO overflows");
 
+    repeat(2)begin
+      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+      check_reg_masked("INT_STAT_RX_OVF", 8'b0000_1000, rd, 8'b0000_1000);
+    end
     //5. Clear RX_OVF bit via W1C and confirm deassertion
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0008);  // W1C RX_OVF
+
+    // Verify IRQ is deasserted
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      checker_error("Interrupt test", "RX_OVF IRQ not deasserted after W1C clear");
 
     //6. Mask RX_OVF IRQ in INT_EN 
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000);
 
     //7. Trigger condition again and confirm no IRQ asserted 
+    tb_top.u_wrap.u_dut.u_regfile.rx_mem[8] = 32'hBEEF_DEAD;  // Overflow data
+    tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
 
-    $display("[INFO] interrupt_test: finished, errors=%0d", ref_model.error_count);
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT_RX_OVF_masked", 8'b0000_1000, rd, 8'b0000_1000);
+
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      checker_error("Interrupt test", "RX_OVF IRQ asserted despite being masked");
+
+    //8. Race W1C clear vs new event
+    fork
+      // Thread 1: W1C clear RX_OVF
+      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0008);  // W1C RX_OVF
+
+      // Thread 2: Trigger new RX_OVF event
+      begin
+        repeat (2) @(posedge tb_top.spi.pclk);  // Ensure alignment with W1C
+        tb_top.u_wrap.u_dut.u_regfile.rx_mem[8] = 32'hDEAD_BEEF;  // Overflow data
+        tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h9;  // Increment write pointer
+      end
+    join
+
+    // Verify RX_OVF is set again due to the new event
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT_RX_OVF_race", 8'b0000_1000, rd, 8'b0000_1000);
+
   endtask
 
 endclass
