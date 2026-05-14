@@ -53,11 +53,13 @@ class loopback_test;
         end
       endcase
 
+      $display("started at width:%d", width_bits);
       // Loop over bit order: MSB-first (0), LSB-first (1)
       for (o = 0; o < 2; o++) begin
-        lsb_first            = (o == 1);
-        miso_word            = ~tx_word;  // hostile MISO
+        lsb_first = (o == 1);
+        miso_word = ~tx_word;  // hostile MISO
 
+        $display("started at LSB/MSB:%d", lsb_first);
         // Configure slave BFM to match CTRL
         tb_top.bfm_mode      = 2'b00;
         tb_top.bfm_width     = width_enc;
@@ -95,6 +97,7 @@ class loopback_test;
 
         // Read RX and check
         tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+        $display(rd);
         ref_model.check_rx_word(rd);
 
         // Sample coverage
