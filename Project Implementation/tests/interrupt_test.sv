@@ -63,7 +63,7 @@ class interrupt_test;
     check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
 
     //5. Clear TX_OVF bit via W1C and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0002);
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0004);
 
     //6. Mask TX_OVF IRQ in INT_EN 
     tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000); 
@@ -96,7 +96,7 @@ class interrupt_test;
     //W1C Race
     fork
       //thread 1
-      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0002);
+      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0004);
 
       //thread 2
       tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF); 
@@ -165,7 +165,7 @@ class interrupt_test;
     //W1C Race
     fork
       //thread 1
-      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0002);
+      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0010);
 
       //thread 2        
       tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF); 
@@ -263,34 +263,72 @@ class interrupt_test;
 //?================== RX_FULL IRQ test ====================
 
     //1. W1C all IRQs in INT_STAT
-
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
+  
     //2. Enable RX_FULL IRQ in INT_EN
-
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0002);
+    
     //3. Fill RX FIFO to trigger RX_FULL condition
+    //Empty RX FIFO by reading until empty
+    repeat (20) begin
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
 
-    //4. Check INT_STAT for RX_FULL bit set twice to check sticky behavior
+      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+    end
+    
+    for (int i = 0; i < 8; i++)
+      tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h1000_0000 + i;
+  
+    tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
+    //4. Check IRQ and INT_STAT for RX_FULL bit set twice to check sticky behavior
+    if(tb_top.spi.cb_mon.irq != 1'b1)
+      checker_error("Interrupt test", "RX_FULL IRQ not asserted when RX_FULL condition met");
 
-    //5. Clear RX_FULL bit via W1C and confirm deassertion
+    repeat(2)begin
+      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+      check_reg_masked("INT_STAT", 8'b0000_0010, rd, 8'b0000_0010);
+    end
 
-    //6. Mask RX_FULL IRQ in INT_EN 
+    //5. Disable RX_FULL bit via INT_EN and confirm deassertion
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000); 
+    if(tb_top.spi.cb_mon.irq == 1'b1)
+      checker_error("Interrupt test", "RX_FULL IRQ not deasserted after masking in INT_EN");
+    
+    //6. W1C RX_FULL bit via INT_STAT
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0002); 
+    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0010);
+    if(tb_top.spi.cb_mon.irq == 1'b1)
+      checker_error("Interrupt test", "RX_FULL IRQ asserted after W1C clear");
 
-    //7. Trigger condition again and confirm no IRQ asserted 
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+      check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0010);
+    
+    //7. Race W1C clear vs new event
+      fork
+        //thread 1
+        tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0010);
+  
+        //thread 2        
+        begin
+          tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h2000_0000 + i;
+          tb_top.u_wrap.u_dut.u_regfile.rx_wp++;
+        end
+      join
 
-//?================== RX_OVF IRQ test ====================
-    //1. W1C all IRQs in INT_STAT
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT", 8'b0000_0010, rd, 8'b0000_0010);
 
-    //2. Enable RX_OVF IRQ in INT_EN
+    // Empty RX FIFO by reading until empty for next test
+    repeat (20) begin
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
 
-    //3. Fill RX FIFO to trigger RX_OVF condition
+      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+    end
 
-    //4. Check INT_STAT for RX_OVF bit set twice to check sticky behavior
-
-    //5. Clear RX_OVF bit via W1C and confirm deassertion
-
-    //6. Mask RX_OVF IRQ in INT_EN 
-
-    //7. Trigger condition again and confirm no IRQ asserted 
-
+    //?================== RX_OVF IRQ test ====================
 
     $display("[INFO] interrupt_test: finished, errors=%0d", ref_model.error_count);
   endtask
