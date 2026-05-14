@@ -27,6 +27,85 @@ class interrupt_test;
     // - clear via W1C (R17)
     // - W1C race (R18)
 
+    //*? TX_OVF IRQ test
+
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable TX_OVF IRQ in INT_EN
+
+    //3. Fill TX FIFO to trigger TX_OVF condition
+
+    //4. Check INT_STAT for TX_OVF bit set twice to check sticky behavior
+
+    //5. Clear TX_OVF bit via W1C and confirm deassertion
+
+    //6. Mask TX_OVF IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted 
+
+    //*? TRANSFER_DONE IRQ test
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable TRANSFER_DONE IRQ in INT_EN
+
+    //3. Fill and drain TX FIFO to trigger TRANSFER_DONE condition for each transfer
+
+    //4. Check INT_STAT for TRANSFER_DONE bit set twice to check sticky behavior
+
+    //5. Clear TRANSFER_DONE bit via W1C and confirm deassertion
+
+    //6. Mask TRANSFER_DONE IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted
+
+    //*? Tx_EMPTY IRQ test
+
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable TX_EMPTY IRQ in INT_EN
+
+    //3. Fill then drain TX FIFO to trigger TX_EMPTY condition
+
+    //4. Check INT_STAT for TX_EMPTY bit set twice to check sticky behavior
+
+    //5. Clear TX_EMPTY bit via W1C and confirm deassertion
+
+    //6. Mask TX_EMPTY IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted 
+
+    //*? RX_FULL IRQ test
+
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable RX_FULL IRQ in INT_EN
+
+    //3. Fill RX FIFO to trigger RX_FULL condition
+
+    //4. Check INT_STAT for RX_FULL bit set twice to check sticky behavior
+
+    //5. Clear RX_FULL bit via W1C and confirm deassertion
+
+    //6. Mask RX_FULL IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted 
+
+    //*? RX_OVF IRQ test
+    //1. W1C all IRQs in INT_STAT
+
+    //2. Enable RX_OVF IRQ in INT_EN
+
+    //3. Fill RX FIFO to trigger RX_OVF condition
+
+    //4. Check INT_STAT for RX_OVF bit set twice to check sticky behavior
+
+    //5. Clear RX_OVF bit via W1C and confirm deassertion
+
+    //6. Mask RX_OVF IRQ in INT_EN 
+
+    //7. Trigger condition again and confirm no IRQ asserted 
+
+
     $display("[INFO] interrupt_test: finished, errors=%0d", ref_model.error_count);
   endtask
 
