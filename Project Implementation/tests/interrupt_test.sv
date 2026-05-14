@@ -19,6 +19,20 @@ class interrupt_test;
 
     $display("[INFO] interrupt_test: starting");
 
+    bit [31:0] rd = 0;
+
+    tb_top.bfm_mode      = 2'b00;  // CPOL=0 CPHA=0
+    tb_top.bfm_pattern   = 8'hA5;
+    tb_top.bfm_width     = 2'b00;  // 8-bit
+    tb_top.bfm_lsb_first = 1'b0;  // MSB-first
+    tb_top.bfm_miso_word = 32'h0000_00A5;  // matches bfm_pattern
+
+    tb_top.u_apb_bfm.apb_write(APB_CTRL, 32'h0000_0003);  // EN, MSTR
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0004);  // divide /4
+
+
+    coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00));
+
     // TODO:
     // For each interrupt source:
     // - cause event
@@ -27,21 +41,72 @@ class interrupt_test;
     // - clear via W1C (R17)
     // - W1C race (R18)
 
-    //*? TX_OVF IRQ test
+    //* TX_OVF IRQ test
 
     //1. W1C all IRQs in INT_STAT
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
 
     //2. Enable TX_OVF IRQ in INT_EN
-
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0004);  // Enable only TX_OVF
     //3. Fill TX FIFO to trigger TX_OVF condition
-
+    for (int i = 0; i < 12; i++) begin
+      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'(i));
+      if(tb_top.spi.cb_mon.irq == 1'b1) break;
+    end
     //4. Check INT_STAT for TX_OVF bit set twice to check sticky behavior
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+
+    if(tb_top.spi.cb_mon.irq != 1'b1)
+      checker_error("Interrupt test", "TX_OVF IRQ is desserted after reading INT_STAT");
+    
+    check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
 
     //5. Clear TX_OVF bit via W1C and confirm deassertion
+    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0004);
 
     //6. Mask TX_OVF IRQ in INT_EN 
+    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000); 
+
+    //drain the FIFO to reset state for next test
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  
+      repeat (500) begin
+        tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+        if (rd[0] == 1'b0) break;
+      end
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
 
     //7. Trigger condition again and confirm no IRQ asserted 
+    for (int i = 0; i < 12; i++) begin
+      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'(i));
+      if(tb_top.spi.cb_mon.irq == 1'b1)begin
+        checker_error("Interrupt test", "TX_OVF IRQ is asserted despite being masked");
+        break;
+      end 
+    end
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+
+    if(tb_top.spi.cb_mon.irq == 1'b1)
+      checker_error("Interrupt test", "TX_OVF IRQ is asserted despite being masked");
+        
+    check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+    
+    //W1C Race
+    fork
+      //thread 1
+      tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0004);
+
+      //thread 2
+      begin
+        // Skip to access phase (APB write has 2+ clock phases (setup, access)) of W1C
+        repeat(2) @(posedge tb_top.spi.pclk);  
+        tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF); 
+      end     
+    join
+
+    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
 
     //*? TRANSFER_DONE IRQ test
     //1. W1C all IRQs in INT_STAT
