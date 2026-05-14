@@ -206,15 +206,15 @@ class interrupt_test;
     //deassert SS to reset state
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000); 
     
-    //5. Clear TX_EMPTY bit via W1C and confirm deassertion
+    //4. Clear TX_EMPTY bit via W1C and confirm deassertion
     tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
     if(tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ not deasserted after W1C clear");
 
-    //6. Mask TX_EMPTY IRQ in INT_EN 
+    //5. Mask TX_EMPTY IRQ in INT_EN 
     tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000);
 
-    //7. Trigger condition again and confirm no IRQ asserted 
+    //6. Trigger condition again and confirm no IRQ asserted 
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'h0000_00FF);
     tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
