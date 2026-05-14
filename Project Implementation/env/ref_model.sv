@@ -160,6 +160,18 @@ task check_rx_status(input bit [31:0] status, input bit expect_full, expect_empt
   end
 endtask
 
+//Drain TX FIFO
+task drain_tx_fifo();
+    bit [31:0] rd = 0;
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  
+    repeat (500) begin
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      if (rd[0] == 1'b0) break;
+    end
+    check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
+endtask
+
   // ------------------------- Spec edge-case checks --------------------------
   task check_reserved_read_zero(input [7:0] addr, input [31:0] observed);
     if (observed !== 32'h0) begin
