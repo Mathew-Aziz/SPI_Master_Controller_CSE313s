@@ -235,12 +235,14 @@ class interrupt_test;
     end
 
     //!W1C Race (deterministic): backdoor-clear then trigger TX push (Not Sure of Implmentation)
-    tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00001;
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF);
 
     repeat (500) begin
       tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[0] == 1'b0) break;
+      if (rd[0] == 1'b0)begin
+        tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00001;
+        break;
+      end 
     end
     tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
