@@ -54,17 +54,5 @@ localparam APB_INT_EN = 32'h18;
 localparam APB_INT_STAT = 32'h1C;
 localparam APB_DELAY = 32'h20;
 
-// Common Control/Config Values
-localparam CTRL_DEFAULT = 32'h0000_0000;
-localparam SS_EN0 = 32'h0000_0001;  // SS_n[0] enabled, driven low
-localparam SS_DISABLE = 32'h0000_0000;  // All SS_n deasserted
-localparam TIMEOUT_CYCLES = 100000;
-
-// Masks (from your earlier question)
-localparam CTRL_MASK = 32'h0000_00FF;
-localparam STATUS_MASK = 32'h0000_007F;
-localparam CLK_DIV_MASK = 32'h0000_FFFF;
-localparam INT_MASK = 32'h0000_001F;
-localparam DELAY_MASK = 32'h0000_00FF;
 
 `endif
