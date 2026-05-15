@@ -79,7 +79,7 @@ class clk_div_corner_test;
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=0");
   endtask
 
-  static task wait_for_busy_set(int timeout = 100_000, output int set);
+  static task wait_for_busy_set(input int timeout = 100_000, output int set);
     set = 0;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
