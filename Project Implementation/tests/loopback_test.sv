@@ -2,15 +2,15 @@
 `ifndef LOOPBACK_TEST_SV
 `define LOOPBACK_TEST_SV 
 
-localparam [7:0] APB_CTRL = 8'h00;
-localparam [7:0] APB_STATUS = 8'h04;
-localparam [7:0] APB_TX_DATA = 8'h08;
-localparam [7:0] APB_RX_DATA = 8'h0C;
-localparam [7:0] APB_CLK_DIV = 8'h10;
-localparam [7:0] APB_SS_CTRL = 8'h14;
-localparam [7:0] APB_INT_EN = 8'h18;
+localparam [7:0] APB_CTRL     = 8'h00;
+localparam [7:0] APB_STATUS   = 8'h04;
+localparam [7:0] APB_TX_DATA  = 8'h08;
+localparam [7:0] APB_RX_DATA  = 8'h0C;
+localparam [7:0] APB_CLK_DIV  = 8'h10;
+localparam [7:0] APB_SS_CTRL  = 8'h14;
+localparam [7:0] APB_INT_EN   = 8'h18;
 localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY = 8'h20;
+localparam [7:0] APB_DELAY    = 8'h20;
 
 class loopback_test;
 
@@ -26,64 +26,108 @@ class loopback_test;
     int        o;
     bit        lsb_first;
 
+    // NEW: for coverage sampling convenience
+    bit [31:0] ctrl_word;
+
+    // -------------------------------------------------------------------------
+    // NEW: local APB wrappers that also sample coverage (R1/R22)
+    // -------------------------------------------------------------------------
+    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
+      tb_top.u_apb_bfm.apb_write(addr, data);
+      coverage.sample_apb(.addr(addr),
+                          .is_write(1'b1),
+                          .wdata(data),
+                          .rdata(32'h0),
+                          .pslverr(1'b0),
+                          .pready(1'b1));
+    endtask
+
+    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
+      tb_top.u_apb_bfm.apb_read(addr, data);
+      coverage.sample_apb(.addr(addr),
+                          .is_write(1'b0),
+                          .wdata(32'h0),
+                          .rdata(data),
+                          .pslverr(1'b0),
+                          .pready(1'b1));
+    endtask
+
     $display("[INFO] loopback_test: starting");
 
+    // Program div + delay (and sample their dedicated covergroups)
+    apb_wr(APB_CLK_DIV, 32'h0000_0002);
+    coverage.sample_clk_div(16'h0002);
 
-    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0002);
-    tb_top.u_apb_bfm.apb_write(APB_DELAY, 32'h0);
-
+    apb_wr(APB_DELAY, 32'h0);
+    coverage.sample_delay(8'h00, 1'b0);
 
     // Loop over widths: 8, 16, 32
     for (w = 0; w < 3; w++) begin
       case (w)
         0: begin
-          width_enc = 2'b00;
+          width_enc  = 2'b00;
           width_bits = 8;
-          tx_word = 32'h0000_00A5;
+          tx_word    = 32'h0000_00A5;
         end
         1: begin
-          width_enc = 2'b01;
+          width_enc  = 2'b01;
           width_bits = 16;
-          tx_word = 32'h0000_A55A;
+          tx_word    = 32'h0000_A55A;
         end
         2: begin
-          width_enc = 2'b10;
+          width_enc  = 2'b10;
           width_bits = 32;
-          tx_word = 32'hDEAD_BEEF;
+          tx_word    = 32'hDEAD_BEEF;
         end
       endcase
 
       $display("started at width:%d", width_bits);
+
       // Loop over bit order: MSB-first (0), LSB-first (1)
       for (o = 0; o < 2; o++) begin
         lsb_first = (o == 1);
         miso_word = ~tx_word;  // hostile MISO
 
         $display("started at LSB/MSB:%d", lsb_first);
+
         // Configure slave BFM to match CTRL
         tb_top.bfm_mode      = 2'b00;
         tb_top.bfm_width     = width_enc;
         tb_top.bfm_lsb_first = lsb_first;
         tb_top.bfm_miso_word = miso_word;
 
-        // CTRL: EN=1, MSTR=1, MODE=00, LSB_FIRST=lsb_first, LOOPBACK=1, WIDTH=width_enc
-        tb_top.u_apb_bfm.apb_write(APB_CTRL, {24'h0, width_enc, 1'b1, lsb_first, 2'b00, 1'b1, 1'b1
-                                   });
+        // Build CTRL (explicit fields) and write it
+        ctrl_word      = 32'h0;
+        ctrl_word[0]   = 1'b1;        // EN
+        ctrl_word[1]   = 1'b1;        // MSTR
+        ctrl_word[3:2] = 2'b00;       // MODE
+        ctrl_word[4]   = lsb_first;   // LSB_FIRST
+        ctrl_word[5]   = 1'b1;        // LOOPBACK
+        ctrl_word[7:6] = width_enc;   // WIDTH
 
-        // Assert SS0 low
-        tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h1);
+        apb_wr(APB_CTRL, ctrl_word);
+
+        // NEW: cover SPI config + loopback (R4/R5/R6/R25 + R19)
+        coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc), .loopback(1'b1));
+
+        // Assert SS0 low (and sample SS coverage)
+        apb_wr(APB_SS_CTRL, 32'h1);
+        coverage.sample_ss(4'b0001, 4'b0000);
+
+        // Optional busy sampling: we know we're starting a transfer now
+        coverage.sample_busy(1'b1, width_enc);
 
         // Predict expected RX (loopback => RX == TX)
         ref_model.predict_word(.tx_word(tx_word), .width_bits(width_bits), .loopback(1'b1),
                                .miso_word(miso_word));
 
         // Push TX
-        tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_word);
+        apb_wr(APB_TX_DATA, tx_word);
 
         // Poll BUSY with timeout
         timed_out = 1'b1;
         repeat (500) begin
-          tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+          apb_rd(APB_STATUS, rd);
           if (rd[0] == 1'b0) begin
             timed_out = 1'b0;
             break;
@@ -91,20 +135,21 @@ class loopback_test;
         end
 
         if (timed_out)
-          ref_model.checker_error("BUSY_TIMEOUT", $sformatf(
-                                  "BUSY did not clear for width=%0d lsb=%0d", width_bits, lsb_first
-                                  ));
+          ref_model.checker_error("BUSY_TIMEOUT",
+                                  $sformatf("BUSY did not clear for width=%0d lsb=%0d",
+                                            width_bits, lsb_first));
 
         // Read RX and check
-        tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+        apb_rd(APB_RX_DATA, rd);
         $display(rd);
         ref_model.check_rx_word(rd);
 
-        // Sample coverage
-        coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc));
+        // BUSY ended
+        coverage.sample_busy(1'b0, width_enc);
 
-        // Deassert SS
-        tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0);
+        // Deassert SS (and sample SS coverage)
+        apb_wr(APB_SS_CTRL, 32'h0);
+        coverage.sample_ss(4'b0000, 4'b0000);
       end
     end
 
