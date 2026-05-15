@@ -2,46 +2,27 @@
 `ifndef REG_ACCESS_TEST_SV
 `define REG_ACCESS_TEST_SV 
 
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 class reg_access_test;
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
     bit [31:0] rd;
     bit [31:0] rd_small = 32'h0000_0001;
-    bit [31:0] rd_big   = 32'hA5A5_5A5A;
+    bit [31:0] rd_big = 32'hA5A5_5A5A;
 
-    // -------------------------------------------------------------------------
-    // NEW: local APB wrappers that also sample coverage (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
 
     $display("[INFO] reg_access_test: starting");
 
@@ -149,29 +130,44 @@ class reg_access_test;
     ref_model.check_reg("RX_DATA_WO", 32'h0, rd);
 
     // ---------------- TP-REG-04: Reserved offsets ----------------
-    apb_rd(8'h24, rd);               coverage.sample_reserved(8'h24, 1'b0);
-    apb_wr(8'h24, 32'hAABB_CCDD);    coverage.sample_reserved(8'h24, 1'b1);
-    apb_rd(8'h24, rd);               coverage.sample_reserved(8'h24, 1'b0);
+    apb_rd(8'h24, rd);
+    coverage.sample_reserved(8'h24, 1'b0);
+    apb_wr(8'h24, 32'hAABB_CCDD);
+    coverage.sample_reserved(8'h24, 1'b1);
+    apb_rd(8'h24, rd);
+    coverage.sample_reserved(8'h24, 1'b0);
     ref_model.check_reserved_read_zero(8'h24, rd);
 
-    apb_rd(8'h28, rd);               coverage.sample_reserved(8'h28, 1'b0);
-    apb_wr(8'h28, 32'hAABB_CCDD);    coverage.sample_reserved(8'h28, 1'b1);
-    apb_rd(8'h28, rd);               coverage.sample_reserved(8'h28, 1'b0);
+    apb_rd(8'h28, rd);
+    coverage.sample_reserved(8'h28, 1'b0);
+    apb_wr(8'h28, 32'hAABB_CCDD);
+    coverage.sample_reserved(8'h28, 1'b1);
+    apb_rd(8'h28, rd);
+    coverage.sample_reserved(8'h28, 1'b0);
     ref_model.check_reserved_read_zero(8'h28, rd);
 
-    apb_rd(8'h3C, rd);               coverage.sample_reserved(8'h3C, 1'b0);
-    apb_wr(8'h3C, 32'hAABB_CCDD);    coverage.sample_reserved(8'h3C, 1'b1);
-    apb_rd(8'h3C, rd);               coverage.sample_reserved(8'h3C, 1'b0);
+    apb_rd(8'h3C, rd);
+    coverage.sample_reserved(8'h3C, 1'b0);
+    apb_wr(8'h3C, 32'hAABB_CCDD);
+    coverage.sample_reserved(8'h3C, 1'b1);
+    apb_rd(8'h3C, rd);
+    coverage.sample_reserved(8'h3C, 1'b0);
     ref_model.check_reserved_read_zero(8'h3C, rd);
 
-    apb_rd(8'h7C, rd);               coverage.sample_reserved(8'h7C, 1'b0);
-    apb_wr(8'h7C, 32'hAABB_CCDD);    coverage.sample_reserved(8'h7C, 1'b1);
-    apb_rd(8'h7C, rd);               coverage.sample_reserved(8'h7C, 1'b0);
+    apb_rd(8'h7C, rd);
+    coverage.sample_reserved(8'h7C, 1'b0);
+    apb_wr(8'h7C, 32'hAABB_CCDD);
+    coverage.sample_reserved(8'h7C, 1'b1);
+    apb_rd(8'h7C, rd);
+    coverage.sample_reserved(8'h7C, 1'b0);
     ref_model.check_reserved_read_zero(8'h7C, rd);
 
-    apb_rd(8'h42, rd);               coverage.sample_reserved(8'h42, 1'b0);
-    apb_wr(8'h42, 32'hAABB_CCDD);    coverage.sample_reserved(8'h42, 1'b1);
-    apb_rd(8'h42, rd);               coverage.sample_reserved(8'h42, 1'b0);
+    apb_rd(8'h42, rd);
+    coverage.sample_reserved(8'h42, 1'b0);
+    apb_wr(8'h42, 32'hAABB_CCDD);
+    coverage.sample_reserved(8'h42, 1'b1);
+    apb_rd(8'h42, rd);
+    coverage.sample_reserved(8'h42, 1'b0);
     ref_model.check_reserved_read_zero(8'h42, rd);
 
     // ---------------- TP-REG-05: EN=0 behavior ----------------
@@ -187,7 +183,7 @@ class reg_access_test;
     // Check STATUS flags after EN=0 attempt
     apb_rd(APB_STATUS, rd);
     ref_model.check_tx_status(rd, 1'b0, 1'b1, 1'b0);  // full=0, empty=1, busy=0
-    ref_model.check_rx_status(rd, 1'b0, 1'b1);        // full=0, empty=1
+    ref_model.check_rx_status(rd, 1'b0, 1'b1);  // full=0, empty=1
 
     if (rd !== 32'h0) begin
       ref_model.checker_error("EN0_RX_NONZERO", $sformatf("RX_DATA=0x%08h (expected 0)", rd));

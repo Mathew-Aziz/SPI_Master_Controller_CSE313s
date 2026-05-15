@@ -21,17 +21,22 @@
 `define ERROR_INJECTION_TEST_SV 
 
 // Localparam aliases (keeps file self-contained)
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 class error_injection_test;
+
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
@@ -39,28 +44,6 @@ class error_injection_test;
     integer errors = 0, i, wait_count;
     bit skip_rest;
 
-    // -------------------------------------------------------------------------
-    // Local APB wrappers: BFM + coverage sampling (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
 
     // SETUP
     ref_model.apply_reset(.min_cycles(2));
@@ -107,10 +90,12 @@ class error_injection_test;
     end
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[3] !== 1'b0) begin
-      $display("[SCOREBOARD_ERROR] TC-1: INT_STAT[3] (RX_OVF) set after empty read, INT_STAT=0x%08h",
-               int_stat);
+      $display(
+          "[SCOREBOARD_ERROR] TC-1: INT_STAT[3] (RX_OVF) set after empty read, INT_STAT=0x%08h",
+          int_stat);
       errors++;
       ref_model.error_count++;
     end
@@ -149,7 +134,8 @@ class error_injection_test;
       ref_model.error_count++;
     end
     if (status[5] !== 1'b0) begin
-      $display("[SCOREBOARD_ERROR] TC-2: STATUS[5] (TX_OVF) set prematurely, STATUS=0x%08h", status);
+      $display("[SCOREBOARD_ERROR] TC-2: STATUS[5] (TX_OVF) set prematurely, STATUS=0x%08h",
+               status);
       errors++;
       ref_model.error_count++;
     end
@@ -195,7 +181,8 @@ class error_injection_test;
     end
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[2] !== 1'b1) begin
       $display("[SCOREBOARD_ERROR] TC-3: INT_STAT[2] (TX_OVF) not set, INT_STAT=0x%08h", int_stat);
       errors++;
@@ -232,7 +219,8 @@ class error_injection_test;
     coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[2] !== 1'b1) begin
       $display("[SCOREBOARD_ERROR] TC-4: INT_STAT[2] not set before clear test, INT_STAT=0x%08h",
                int_stat);
@@ -245,22 +233,26 @@ class error_injection_test;
       // write-0 no effect
       apb_wr(APB_INT_STAT, 32'h0000_0000);
       // sampled as "no W1C"
-      coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+      coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                          .w1c_race_mask(5'b0));
 
       apb_rd(APB_INT_STAT, int_stat);
       if (int_stat[2] !== 1'b1) begin
-        $display("[SCOREBOARD_ERROR] TC-4: INT_STAT[2] cleared by write-0, INT_STAT=0x%08h", int_stat);
+        $display("[SCOREBOARD_ERROR] TC-4: INT_STAT[2] cleared by write-0, INT_STAT=0x%08h",
+                 int_stat);
         errors++;
         ref_model.error_count++;
       end
 
       // W1C clear bit2
       apb_wr(APB_INT_STAT, 32'h0000_0004);
-      coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b00100), .w1c_race_mask(5'b0));
+      coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b00100),
+                          .w1c_race_mask(5'b0));
 
       apb_rd(APB_INT_STAT, int_stat);
       if (int_stat[2] !== 1'b0) begin
-        $display("[SCOREBOARD_ERROR] TC-4: INT_STAT[2] not cleared by W1C, INT_STAT=0x%08h", int_stat);
+        $display("[SCOREBOARD_ERROR] TC-4: INT_STAT[2] not cleared by W1C, INT_STAT=0x%08h",
+                 int_stat);
         errors++;
         ref_model.error_count++;
       end
@@ -307,14 +299,16 @@ class error_injection_test;
 
     apb_rd(APB_STATUS, status);
     if (status[6] !== 1'b1) begin
-      $display("[SCOREBOARD_ERROR] TC-5: STATUS[6] (RX_OVF) not set after 9 transfers, STATUS=0x%08h",
-               status);
+      $display(
+          "[SCOREBOARD_ERROR] TC-5: STATUS[6] (RX_OVF) not set after 9 transfers, STATUS=0x%08h",
+          status);
       errors++;
       ref_model.error_count++;
     end
     if (status[3] !== 1'b1) begin
-      $display("[SCOREBOARD_ERROR] TC-5: STATUS[3] (RX_FULL) not set after 9 transfers, STATUS=0x%08h",
-               status);
+      $display(
+          "[SCOREBOARD_ERROR] TC-5: STATUS[3] (RX_FULL) not set after 9 transfers, STATUS=0x%08h",
+          status);
       errors++;
       ref_model.error_count++;
     end
@@ -323,7 +317,8 @@ class error_injection_test;
     coverage.sample_overflow(.tx_ovf(1'b0), .rx_ovf(1'b1), .rx_empty_rd(1'b0));
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[3] !== 1'b1) begin
       $display("[SCOREBOARD_ERROR] TC-5: INT_STAT[3] (RX_OVF) not set, INT_STAT=0x%08h", int_stat);
       errors++;
@@ -348,12 +343,14 @@ class error_injection_test;
 
     // W1C clear RX_OVF (bit3)
     apb_wr(APB_INT_STAT, 32'h0000_0008);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b01000), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b01000),
+                        .w1c_race_mask(5'b0));
 
     @(posedge tb_top.PCLK);
     apb_rd(APB_INT_STAT, int_stat);
     if (int_stat[3] !== 1'b0) begin
-      $display("[SCOREBOARD_ERROR] TC-5: INT_STAT[3] not cleared by W1C, INT_STAT=0x%08h", int_stat);
+      $display("[SCOREBOARD_ERROR] TC-5: INT_STAT[3] not cleared by W1C, INT_STAT=0x%08h",
+               int_stat);
       errors++;
       ref_model.error_count++;
     end
@@ -376,10 +373,12 @@ class error_injection_test;
     coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[2] !== 1'b1) begin
-      $display("[SCOREBOARD_ERROR] TC-6: INT_STAT[2] not set with INT_EN=0 (R16 violation), INT_STAT=0x%08h",
-               int_stat);
+      $display(
+          "[SCOREBOARD_ERROR] TC-6: INT_STAT[2] not set with INT_EN=0 (R16 violation), INT_STAT=0x%08h",
+          int_stat);
       errors++;
       ref_model.error_count++;
     end
@@ -414,7 +413,7 @@ class error_injection_test;
     apb_wr(APB_INT_STAT, 32'hFFFF_FFFF);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    apb_wr(APB_INT_EN, 32'h0000_0004); // enable TX_OVF irq (bit2)
+    apb_wr(APB_INT_EN, 32'h0000_0004);  // enable TX_OVF irq (bit2)
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
     apb_wr(APB_SS_CTRL, 32'h0000_0000);
@@ -428,7 +427,8 @@ class error_injection_test;
     repeat (2) @(posedge tb_top.PCLK);
 
     apb_rd(APB_INT_STAT, int_stat);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b00100), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
     if (int_stat[2] !== 1'b1) begin
       $display("[SCOREBOARD_ERROR] TC-7: INT_STAT[2] (TX_OVF) not set, INT_STAT=0x%08h", int_stat);
       errors++;
@@ -446,7 +446,8 @@ class error_injection_test;
     end
 
     apb_wr(APB_INT_EN, 32'h0000_0000);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
+                        .w1c_race_mask(5'b0));
 
     @(posedge tb_top.PCLK);
     begin
@@ -482,17 +483,12 @@ class error_injection_test;
     apb_wr(APB_TX_DATA, 32'h0000_0044);
     apb_wr(APB_TX_DATA, 32'h0000_0055);
 
-    apb_wr(APB_CTRL, 32'h0000_0002); // EN=0, MSTR=1
+    apb_wr(APB_CTRL, 32'h0000_0002);  // EN=0, MSTR=1
 
     // Sample ctrl_en coverage (we can observe SS_n pin via tb_top.spi)
     // NOTE: tx_occ/rx_occ are not tracked here; pass 0 as conservative.
-    coverage.sample_ctrl_en(.en(1'b0),
-                            .sclk(tb_top.spi.sclk),
-                            .mode(2'b00),
-                            .ss_n(tb_top.spi.ss_n),
-                            .ss_en(4'b0001),
-                            .tx_occ(0),
-                            .rx_occ(0));
+    coverage.sample_ctrl_en(.en(1'b0), .sclk(tb_top.spi.sclk), .mode(2'b00), .ss_n(tb_top.spi.ss_n),
+                            .ss_en(4'b0001), .tx_occ(0), .rx_occ(0));
 
     repeat (4) @(posedge tb_top.PCLK);
 
@@ -503,8 +499,9 @@ class error_injection_test;
       ref_model.error_count++;
     end
     if (status[2] !== 1'b1) begin
-      $display("[SCOREBOARD_ERROR] TC-8: STATUS[2] (TX_EMPTY) not set after EN=0 flush, STATUS=0x%08h",
-               status);
+      $display(
+          "[SCOREBOARD_ERROR] TC-8: STATUS[2] (TX_EMPTY) not set after EN=0 flush, STATUS=0x%08h",
+          status);
       errors++;
       ref_model.error_count++;
     end
@@ -513,21 +510,17 @@ class error_injection_test;
       logic [3:0] ss_n_val;
       ss_n_val = tb_top.spi.ss_n;
       if (ss_n_val !== 4'hF) begin
-        $display("[SCOREBOARD_ERROR] TC-8: SS_n not forced high when EN=0, SS_n=0x%0h (R3 violation)",
-                 ss_n_val);
+        $display(
+            "[SCOREBOARD_ERROR] TC-8: SS_n not forced high when EN=0, SS_n=0x%0h (R3 violation)",
+            ss_n_val);
         errors++;
         ref_model.error_count++;
       end
     end
 
     apb_wr(APB_CTRL, 32'h0000_0003);
-    coverage.sample_ctrl_en(.en(1'b1),
-                            .sclk(tb_top.spi.sclk),
-                            .mode(2'b00),
-                            .ss_n(tb_top.spi.ss_n),
-                            .ss_en(4'b0001),
-                            .tx_occ(0),
-                            .rx_occ(0));
+    coverage.sample_ctrl_en(.en(1'b1), .sclk(tb_top.spi.sclk), .mode(2'b00), .ss_n(tb_top.spi.ss_n),
+                            .ss_en(4'b0001), .tx_occ(0), .rx_occ(0));
 
     apb_wr(APB_SS_CTRL, 32'h0000_0001);
     coverage.sample_ss(4'b0001, 4'b0000);
@@ -538,31 +531,37 @@ class error_injection_test;
     begin
       bit [31:0] reserved_rd;
 
-      apb_rd(8'h24, reserved_rd);             coverage.sample_reserved(8'h24, 1'b0);
+      apb_rd(8'h24, reserved_rd);
+      coverage.sample_reserved(8'h24, 1'b0);
       if (reserved_rd !== 32'h0) begin
         $display("[SCOREBOARD_ERROR] TC-9: addr=0x24 expected=0 observed=0x%08h", reserved_rd);
         errors++;
         ref_model.error_count++;
       end
 
-      apb_rd(8'h28, reserved_rd);             coverage.sample_reserved(8'h28, 1'b0);
+      apb_rd(8'h28, reserved_rd);
+      coverage.sample_reserved(8'h28, 1'b0);
       if (reserved_rd !== 32'h0) begin
         $display("[SCOREBOARD_ERROR] TC-9: addr=0x28 expected=0 observed=0x%08h", reserved_rd);
         errors++;
         ref_model.error_count++;
       end
 
-      apb_rd(8'h2C, reserved_rd);             coverage.sample_reserved(8'h2C, 1'b0);
+      apb_rd(8'h2C, reserved_rd);
+      coverage.sample_reserved(8'h2C, 1'b0);
       if (reserved_rd !== 32'h0) begin
         $display("[SCOREBOARD_ERROR] TC-9: addr=0x2C expected=0 observed=0x%08h", reserved_rd);
         errors++;
         ref_model.error_count++;
       end
 
-      apb_wr(8'h24, 32'hDEAD_BEEF);           coverage.sample_reserved(8'h24, 1'b1);
-      apb_rd(8'h24, reserved_rd);             coverage.sample_reserved(8'h24, 1'b0);
+      apb_wr(8'h24, 32'hDEAD_BEEF);
+      coverage.sample_reserved(8'h24, 1'b1);
+      apb_rd(8'h24, reserved_rd);
+      coverage.sample_reserved(8'h24, 1'b0);
       if (reserved_rd !== 32'h0) begin
-        $display("[SCOREBOARD_ERROR] TC-9: addr=0x24 nonzero after write, observed=0x%08h", reserved_rd);
+        $display("[SCOREBOARD_ERROR] TC-9: addr=0x24 nonzero after write, observed=0x%08h",
+                 reserved_rd);
         errors++;
         ref_model.error_count++;
       end

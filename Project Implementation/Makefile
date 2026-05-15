@@ -43,7 +43,7 @@ SEQ_SRCS   ?= \
   $(STUDENT_TB)/sequences/stim_lib.sv
 
 ASSERT_SRCS?= \
-  $(STUDENT_TB)/assertions/apb_sva.sv
+  $(STUDENT_TB)/assertions/spi_sva.sv
 
 # NOTE: test files (tests/*.sv) are NOT listed here on purpose.
 #

@@ -2,16 +2,6 @@
 `ifndef CLK_DIV_CORNER_TEST_SV
 `define CLK_DIV_CORNER_TEST_SV 
 
-localparam [7:0] APB_CTRL = 8'h00;
-localparam [7:0] APB_STATUS = 8'h04;
-localparam [7:0] APB_TX_DATA = 8'h08;
-localparam [7:0] APB_RX_DATA = 8'h0C;
-localparam [7:0] APB_CLK_DIV = 8'h10;
-localparam [7:0] APB_SS_CTRL = 8'h14;
-localparam [7:0] APB_INT_EN = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY = 8'h20;
-
 // Magic Numbers
 localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 localparam int TIMEOUT_CYCLES = 2_500_000;
@@ -132,7 +122,8 @@ class clk_div_corner_test;
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
     // Attempt mid-transfer DIV update to validate sampled-at-start (R25).
-
+    int  div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    byte rx_data;
     // --- Phase 1: BFM & Register Init ---    
     $display("[INFO] clk_div_corner_test: starting");
     // Reset Sequence
@@ -155,8 +146,7 @@ class clk_div_corner_test;
     coverage.sample_ss(4'b0001, 4'b0000);
 
     // --- Phase 2: Corner Cases ---
-    int  div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
-    byte rx_data;
+
 
     foreach (div_corners[i]) begin
       int div_value = div_corners[i];

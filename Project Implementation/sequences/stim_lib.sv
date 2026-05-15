@@ -9,25 +9,62 @@
 // =============================================================================
 
 `ifndef SPI_STIM_LIB_SV
-`define SPI_STIM_LIB_SV
+`define SPI_STIM_LIB_SV 
 
 class spi_txn;
-    rand bit [1:0]  mode;       // {CPOL, CPHA}
-    rand bit        lsb_first;
-    rand bit [1:0]  width;      // 00=8, 01=16, 10=32
-    rand bit [15:0] clk_div;
-    rand bit [7:0]  delay_cfg;
-    rand bit [31:0] tx_data;
-    rand bit        loopback;
+  rand bit [ 1:0] mode;  // {CPOL, CPHA}
+  rand bit        lsb_first;
+  rand bit [ 1:0] width;  // 00=8, 01=16, 10=32
+  rand bit [15:0] clk_div;
+  rand bit [ 7:0] delay_cfg;
+  rand bit [31:0] tx_data;
+  rand bit        loopback;
 
-    constraint c_width_legal  { width inside {[0:2]}; }
-    constraint c_clk_div_sane { clk_div inside {[0:2048]}; }
-    constraint c_delay_sane   { delay_cfg inside {[0:31]}; }
+  constraint c_width_legal {width inside {[0 : 2]};}
+  constraint c_clk_div_sane {clk_div inside {[0 : 2048]};}
+  constraint c_delay_sane {delay_cfg inside {[0 : 31]};}
 
-    function string sprint();
-        return $sformatf("mode=%0d lsb=%0b width=%0d div=%0d delay=%0d tx=0x%08h lb=%0b",
-                         mode, lsb_first, width, clk_div, delay_cfg, tx_data, loopback);
-    endfunction
+  function string sprint();
+    return $sformatf(
+        "mode=%0d lsb=%0b width=%0d div=%0d delay=%0d tx=0x%08h lb=%0b",
+        mode,
+        lsb_first,
+        width,
+        clk_div,
+        delay_cfg,
+        tx_data,
+        loopback
+    );
+  endfunction
 endclass
 
-`endif // SPI_STIM_LIB_SV
+`endif  // SPI_STIM_LIB_SV
+
+`ifndef APB_CONSTANTS_SVH
+`define APB_CONSTANTS_SVH 
+
+// Register Offsets
+localparam APB_CTRL = 32'h00;
+localparam APB_STATUS = 32'h04;
+localparam APB_TX_DATA = 32'h08;
+localparam APB_RX_DATA = 32'h0C;
+localparam APB_CLK_DIV = 32'h10;
+localparam APB_SS_CTRL = 32'h14;
+localparam APB_INT_EN = 32'h18;
+localparam APB_INT_STAT = 32'h1C;
+localparam APB_DELAY = 32'h20;
+
+// Common Control/Config Values
+localparam CTRL_DEFAULT = 32'h0000_0000;
+localparam SS_EN0 = 32'h0000_0001;  // SS_n[0] enabled, driven low
+localparam SS_DISABLE = 32'h0000_0000;  // All SS_n deasserted
+localparam TIMEOUT_CYCLES = 100000;
+
+// Masks (from your earlier question)
+localparam CTRL_MASK = 32'h0000_00FF;
+localparam STATUS_MASK = 32'h0000_007F;
+localparam CLK_DIV_MASK = 32'h0000_FFFF;
+localparam INT_MASK = 32'h0000_001F;
+localparam DELAY_MASK = 32'h0000_00FF;
+
+`endif

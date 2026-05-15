@@ -2,17 +2,22 @@
 `ifndef LOOPBACK_TEST_SV
 `define LOOPBACK_TEST_SV 
 
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 class loopback_test;
+
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
@@ -28,29 +33,6 @@ class loopback_test;
 
     // NEW: for coverage sampling convenience
     bit [31:0] ctrl_word;
-
-    // -------------------------------------------------------------------------
-    // NEW: local APB wrappers that also sample coverage (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
 
     $display("[INFO] loopback_test: starting");
 
@@ -97,18 +79,19 @@ class loopback_test;
         tb_top.bfm_miso_word = miso_word;
 
         // Build CTRL (explicit fields) and write it
-        ctrl_word      = 32'h0;
-        ctrl_word[0]   = 1'b1;        // EN
-        ctrl_word[1]   = 1'b1;        // MSTR
-        ctrl_word[3:2] = 2'b00;       // MODE
-        ctrl_word[4]   = lsb_first;   // LSB_FIRST
-        ctrl_word[5]   = 1'b1;        // LOOPBACK
-        ctrl_word[7:6] = width_enc;   // WIDTH
+        ctrl_word            = 32'h0;
+        ctrl_word[0]         = 1'b1;  // EN
+        ctrl_word[1]         = 1'b1;  // MSTR
+        ctrl_word[3:2]       = 2'b00;  // MODE
+        ctrl_word[4]         = lsb_first;  // LSB_FIRST
+        ctrl_word[5]         = 1'b1;  // LOOPBACK
+        ctrl_word[7:6]       = width_enc;  // WIDTH
 
         apb_wr(APB_CTRL, ctrl_word);
 
         // NEW: cover SPI config + loopback (R4/R5/R6/R25 + R19)
-        coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc), .loopback(1'b1));
+        coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc),
+                               .loopback(1'b1));
 
         // Assert SS0 low (and sample SS coverage)
         apb_wr(APB_SS_CTRL, 32'h1);
@@ -135,9 +118,9 @@ class loopback_test;
         end
 
         if (timed_out)
-          ref_model.checker_error("BUSY_TIMEOUT",
-                                  $sformatf("BUSY did not clear for width=%0d lsb=%0d",
-                                            width_bits, lsb_first));
+          ref_model.checker_error("BUSY_TIMEOUT", $sformatf(
+                                  "BUSY did not clear for width=%0d lsb=%0d", width_bits, lsb_first
+                                  ));
 
         // Read RX and check
         apb_rd(APB_RX_DATA, rd);

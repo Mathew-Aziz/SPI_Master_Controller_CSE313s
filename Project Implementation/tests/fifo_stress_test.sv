@@ -2,17 +2,23 @@
 `ifndef FIFO_STRESS_TEST_SV
 `define FIFO_STRESS_TEST_SV 
 
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 class fifo_stress_test;
+
+
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
@@ -20,40 +26,17 @@ class fifo_stress_test;
     bit [31:0] TX_q[$];
     bit [31:0] RX_q[$];
 
-    // -------------------------------------------------------------------------
-    // Local APB wrappers: BFM + coverage sampling (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
     $display("[INFO] fifo_stress_test: starting");
 
     // 1. Configure BFM slave stable mode/width (mode0, width=8) 
     tb_top.bfm_mode      = 2'b00;  // CPOL=0 CPHA=0
     tb_top.bfm_pattern   = 8'hA5;
     tb_top.bfm_width     = 2'b00;  // 8-bit
-    tb_top.bfm_lsb_first = 1'b0;   // MSB-first
+    tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 32'h0000_00A5;  // matches bfm_pattern
 
-    apb_wr(APB_CTRL, 32'h0000_0003);    // EN, MSTR
-    apb_wr(APB_CLK_DIV, 32'h0000_0004); // divide /4
+    apb_wr(APB_CTRL, 32'h0000_0003);  // EN, MSTR
+    apb_wr(APB_CLK_DIV, 32'h0000_0004);  // divide /4
     coverage.sample_clk_div(16'h0004);
 
     coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
@@ -83,7 +66,7 @@ class fifo_stress_test;
       apb_wr(APB_TX_DATA, 32'(i));
 
       // Track FIFO occupancy for coverage (best-effort)
-      coverage.sample_fifo(i+1, 0);
+      coverage.sample_fifo(i + 1, 0);
 
       apb_rd(APB_STATUS, rd);
       if (i < 7) begin
@@ -104,7 +87,7 @@ class fifo_stress_test;
       if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
       apb_rd(APB_RX_DATA, rd);
     end
-    coverage.sample_fifo(8, 0); // TX still full from earlier
+    coverage.sample_fifo(8, 0);  // TX still full from earlier
 
     for (int i = 0; i < 8; i++) begin
       RX_q.push_back(32'h1000_0000 + i);
@@ -121,7 +104,7 @@ class fifo_stress_test;
     for (int i = 0; i < 8; i++) begin
       apb_rd(APB_RX_DATA, rd);
       ref_model.check_reg("RX_DATA", RX_q[i], rd);
-      coverage.sample_fifo(8, 7-i);
+      coverage.sample_fifo(8, 7 - i);
     end
 
     // Check STATUS shows RX_EMPTY after reading all 8

@@ -2,15 +2,6 @@
 `ifndef DELAY_TRANSFER_TEST_SV
 `define DELAY_TRANSFER_TEST_SV 
 
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 localparam int TIMEOUT_CYCLES = 2_500_000;
 localparam int IDLE_MEASURE_TIMEOUT = 200_000;
@@ -121,29 +112,23 @@ class delay_transfer_test;
     @(posedge tb_top.PCLK);
   endtask
 
-  static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
-    // -------------------------------------------------------------------------
-    // Local APB wrappers: BFM + coverage sampling (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
+    byte tx_words[3] = '{8'hA5, 8'h3C, 8'h78};
+    int delay_values[$] = '{0, 1, 200};
 
     // DELAY=0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
     $display("[INFO] delay_transfer_test: starting");
@@ -156,7 +141,7 @@ class delay_transfer_test;
 
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
     tb_top.bfm_width     = 2'b00;  // 8-bit width
-    tb_top.bfm_lsb_first = 1'b0;   // MSB-first
+    tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
 
     coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
@@ -168,10 +153,9 @@ class delay_transfer_test;
     apb_wr(APB_SS_CTRL, SS_EN0);
     coverage.sample_ss(4'b0001, 4'b0000);
 
-    byte tx_words[3] = '{8'hA5, 8'h3C, 8'h78};
+
 
     // --- Phase 2: Idle Cycle Verification ---
-    int delay_values[$] = '{0, 1, 200};
     foreach (delay_values[i]) begin
       int          delay_value = delay_values[i];
       int unsigned div_val = get_div_value();

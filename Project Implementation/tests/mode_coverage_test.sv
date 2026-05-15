@@ -1,19 +1,22 @@
 `ifndef MODE_COVERAGE_TEST_SV
 `define MODE_COVERAGE_TEST_SV 
 
-// NOTE: your original snippet omitted these localparams; keep them here so the
-// file is self-contained like the other tests.
-localparam [7:0] APB_CTRL     = 8'h00;
-localparam [7:0] APB_STATUS   = 8'h04;
-localparam [7:0] APB_TX_DATA  = 8'h08;
-localparam [7:0] APB_RX_DATA  = 8'h0C;
-localparam [7:0] APB_CLK_DIV  = 8'h10;
-localparam [7:0] APB_SS_CTRL  = 8'h14;
-localparam [7:0] APB_INT_EN   = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY    = 8'h20;
 
 class mode_coverage_test;
+
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
@@ -30,28 +33,6 @@ class mode_coverage_test;
     bit [31:0] ctrl_val;
     integer wait_count = 0;
 
-    // -------------------------------------------------------------------------
-    // Local APB wrappers: BFM + coverage sampling (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
 
     // Reset & Clock Setup
     ref_model.apply_reset(.min_cycles(2));
@@ -102,18 +83,19 @@ class mode_coverage_test;
           tb_top.bfm_pattern   = expected_rx[7:0];
 
           // Configure DUT CTRL
-          ctrl_val        = 32'h0;
-          ctrl_val[0]     = 1'b1;
-          ctrl_val[1]     = 1'b1;
-          ctrl_val[3:2]   = mode[1:0];
-          ctrl_val[4]     = lsb_first;
-          ctrl_val[7:6]   = width_idx;
-          ctrl_val[5]     = 1'b0;
+          ctrl_val             = 32'h0;
+          ctrl_val[0]          = 1'b1;
+          ctrl_val[1]          = 1'b1;
+          ctrl_val[3:2]        = mode[1:0];
+          ctrl_val[4]          = lsb_first;
+          ctrl_val[7:6]        = width_idx;
+          ctrl_val[5]          = 1'b0;
 
           apb_wr(APB_CTRL, ctrl_val);
 
           // Cover config (R4/R5/R6/R25)
-          coverage.sample_config(.mode(mode[1:0]), .lsb_first(lsb_first), .width(width_idx), .loopback(1'b0));
+          coverage.sample_config(.mode(mode[1:0]), .lsb_first(lsb_first), .width(width_idx),
+                                 .loopback(1'b0));
 
           // Assert SS
           apb_wr(APB_SS_CTRL, 32'h0000_0001);
@@ -143,8 +125,9 @@ class mode_coverage_test;
           end
 
           if (wait_count == timeout) begin
-            $display("[CHECKER_ERROR] mode_coverage_test: timeout waiting BUSY=0 (mode=%0d, width=%0d)",
-                     mode, width_idx);
+            $display(
+                "[CHECKER_ERROR] mode_coverage_test: timeout waiting BUSY=0 (mode=%0d, width=%0d)",
+                mode, width_idx);
             errors++;
             ref_model.error_count++;
             // ensure SS released even on timeout

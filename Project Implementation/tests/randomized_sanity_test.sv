@@ -6,6 +6,20 @@
 
 class randomized_sanity_test;
 
+  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               input bit [31:0] data);
+    tb_top.u_apb_bfm.apb_write(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
+  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
+                               output bit [31:0] data);
+    tb_top.u_apb_bfm.apb_read(addr, data);
+    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
+                        .pready(1'b1));
+  endtask
+
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
     spi_txn        t;
@@ -13,28 +27,6 @@ class randomized_sanity_test;
     bit     [31:0] rd;
     int            seed;
 
-    // -------------------------------------------------------------------------
-    // Local APB wrappers: BFM + coverage sampling (R1/R22)
-    // -------------------------------------------------------------------------
-    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
-      tb_top.u_apb_bfm.apb_write(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b1),
-                          .wdata(data),
-                          .rdata(32'h0),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
-
-    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
-      tb_top.u_apb_bfm.apb_read(addr, data);
-      coverage.sample_apb(.addr(addr),
-                          .is_write(1'b0),
-                          .wdata(32'h0),
-                          .rdata(data),
-                          .pslverr(1'b0),
-                          .pready(1'b1));
-    endtask
 
     $display("[INFO] randomized_sanity_test: starting");
 
@@ -70,23 +62,23 @@ class randomized_sanity_test;
     ctrl_word[5]         = t.loopback;
     ctrl_word[7:6]       = t.width;
 
-    apb_wr(8'h00, ctrl_word);                 // CTRL
-    apb_wr(8'h10, {16'h0, t.clk_div});         // CLK_DIV
+    apb_wr(8'h00, ctrl_word);  // CTRL
+    apb_wr(8'h10, {16'h0, t.clk_div});  // CLK_DIV
     coverage.sample_clk_div(t.clk_div[15:0]);
 
-    apb_wr(8'h20, {24'h0, t.delay_cfg});       // DELAY
+    apb_wr(8'h20, {24'h0, t.delay_cfg});  // DELAY
     coverage.sample_delay(t.delay_cfg[7:0], 1'b0);
 
-    apb_wr(8'h18, 32'h0000_000F);              // INT_EN
+    apb_wr(8'h18, 32'h0000_000F);  // INT_EN
 
-    ref_model.predict_single_byte(.tx_byte(t.tx_data[7:0]),
-                                  .miso_pattern(tb_top.bfm_pattern),
+    ref_model.predict_single_byte(.tx_byte(t.tx_data[7:0]), .miso_pattern(tb_top.bfm_pattern),
                                   .loopback(t.loopback));
 
-    coverage.sample_config(.mode(t.mode), .lsb_first(t.lsb_first), .width(t.width), .loopback(t.loopback));
+    coverage.sample_config(.mode(t.mode), .lsb_first(t.lsb_first), .width(t.width),
+                           .loopback(t.loopback));
 
-    apb_wr(8'h08, t.tx_data);                  // TX_DATA
-    apb_wr(8'h14, 32'h0000_0001);              // SS_CTRL assert ss[0]
+    apb_wr(8'h08, t.tx_data);  // TX_DATA
+    apb_wr(8'h14, 32'h0000_0001);  // SS_CTRL assert ss[0]
     coverage.sample_ss(4'b0001, 4'b0000);
 
     repeat (500) begin
