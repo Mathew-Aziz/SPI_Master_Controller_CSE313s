@@ -21,6 +21,34 @@ localparam SS_DISABLE = 32'h0000_0000;
 
 class delay_transfer_test;
 
+  static function int measure_idle_pclk(int timeout = IDLE_MEASURE_TIMEOUT);
+    while (timeout > 0) begin
+      @(posedge tb_top.PCLK);
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) break;
+      timeout--;
+    end
+    if (timeout == 0) return -1;
+
+    int count = 0;
+    while (timeout > 0) begin
+      @(posedge tb_top.PCLK);
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) break;  // BUSY re-asserted
+      count++;
+      timeout--;
+    end
+    if (timeout == 0) return -1;
+
+    return count;
+  endfunction
+
+  static task drain_rx(input int num_words, ref spi_ref_model ref_model);
+    for (int i = 0; i < num_words; i++) begin
+      void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
+      ref_model.pop_rx();
+    end
+  endtask
+
+
   static function int wait_for_busy_set(int timeout = TIMEOUT_CYCLES);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
@@ -52,7 +80,7 @@ class delay_transfer_test;
     // DELAY= 0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
 
     $display("[INFO] delay_transfer_test: starting");
-    // Reset Sequence
+    // --- Phase 1: Reset & Init ---
     tb_top.PRESETn = 0;
     repeat (5) @(posedge tb_top.PCLK);
     tb_top.PRESETn = 1;
@@ -66,11 +94,66 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, SS_DISABLE);  // DIV=0 baseline
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);  // SS_EN[0]=1, SS_VAL[0]=0
 
-    // Phase 1
+    // --- Phase 2: Idle Cycle Verification ---
     int delay_values[$] = '{0, 1, 200};
-
     foreach (delay_values[i]) begin
+      int delay_value = delay_values[i];
+      int div_value = 1;
+      int expected_idle_pclk = div_value * (div_value + 1);
 
+      // Update delay value
+      tb_top.u_apb_bfm.apb_write(APB_DELAY, delay_value);
+      coverage.sample_delay();
+
+      // Predict + queue TX words
+      int number_of_words = 3;
+      byte tx_words[number_of_words] = '{8'hA5, 8'h3C, 8'h78};
+      foreach (tx_words[word]) begin
+        ref_model.predit_transfer(.tx_word(word), .width(8));
+        tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
+      end
+
+      // Wait for first transfer to start
+      if (!wait_for_busy_set()) begin
+        ref_model.error_count++;
+        continue;
+      end
+
+      // 2 gaps for 3 words
+      int number_of_gaps = number_of_words - 1;
+      for (int gap = 0; gap < number_of_gaps; gap++) begin
+        int observed_idle = measure_idle_pclk();
+        if (observed_idle == -1) begin
+          $display("[CHECKER_ERROR] delay_transfer: idle measurement timeout (DELAY=%0d, gap=%0d)",
+                   delay_value, gap);
+          ref_model.error_count++;
+          break;
+        end
+
+        if (delay_value > 0) begin
+          int difference = (observed_idle > expected_idle_pclk) ? observed_idle - expected_idle_pclk : 
+                              expected_idle_pclk - observed_idle;
+          if (difference > 1) begin  // Allow 1 PCLK sync skew
+            $display(
+                "[SCOREBOARD_ERROR] delay_transfer: idle PCLK mismatch (DELAY=%0d, expected=%0d, observed=%0d)",
+                delay_value, expected_idle_pclk, observed_idle);
+            ref_model.error_count++;
+          end
+        end else begin
+          if (observed_idle > 2) begin
+            $display(
+                "[SCOREBOARD_ERROR] delay_transfer: unexpected idle with DELAY=0 (observed=%0d)",
+                observed_idle);
+            ref_model.error_count++;
+          end
+        end
+      end
+
+      // Finishing
+      if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
+      drain_rx(3, ref_model);
+      cleanup();
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
     end
 
 
