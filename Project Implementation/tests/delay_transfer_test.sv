@@ -148,17 +148,19 @@ class delay_transfer_test;
     // DELAY=0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
 
     // --- Declarations (hoisted for QuestaSim compatibility) ---
-    byte         tx_words           [3] = '{8'hA5, 8'h3C, 8'h78};
-    int          delay_values       [$] = '{0, 1, 200};
-    int          delay_value;
-    int unsigned div_val;
-    int          expected_idle_pclk;
-    byte         word;
-    int          gap;
-    int          new_delay = 50;
-    int          second_gap;
-    int unsigned div_val_p3;
-    int          expected_second;
+    byte                tx_words           [3] = '{8'hA5, 8'h3C, 8'h78};
+    int                 delay_values       [$] = '{0, 1, 200};
+    int                 delay_value;
+    int unsigned        div_val;
+    int                 expected_idle_pclk;
+    byte                word;
+    int                 gap;
+    int                 new_delay = 50;
+    int                 second_gap;
+    int unsigned        div_val_p3;
+    int                 expected_second;
+    bit          [31:0] status;
+
     // Local variables for task return values
     int busy_set_result, busy_clr_result, idle_result;
 

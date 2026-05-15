@@ -142,6 +142,8 @@ class clk_div_corner_test;
       ref_model.error_count++;
     end
 
+    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);  // ← Read RX for 2nd transfer
+    ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // ← Verify + pop queue
 
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
     ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
