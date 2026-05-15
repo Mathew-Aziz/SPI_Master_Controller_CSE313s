@@ -244,12 +244,12 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
     coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
-    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
+    ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8), .miso_word(32'h00),
+                               .loopback(1'b0));  
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
 
-    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
+    ref_model.predict_transfer(.tx_word(tx_words[2]), .width(8), .miso_word(32'h00),
+                               .loopback(1'b0)); 
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
 
     // First gap: DELAY was 0 when transfer started, expect no idle
