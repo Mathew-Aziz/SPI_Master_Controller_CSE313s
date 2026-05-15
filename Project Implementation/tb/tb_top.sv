@@ -99,6 +99,8 @@ module tb_top;
       .tx_empty_w     (u_wrap.u_dut.u_regfile.tx_empty_w),
       .tx_empty       (u_wrap.u_dut.u_regfile.tx_empty),
       .tx_full_w      (u_wrap.u_dut.u_regfile.tx_full_w),
+       .tx_pop      (u_wrap.u_dut.u_regfile.tx_pop),
+      .transfer_done_pulse      (u_wrap.u_dut.u_regfile.transfer_done_pulse),
       .tx_count       (u_wrap.u_dut.u_regfile.tx_count),
       .rx_count       (u_wrap.u_dut.u_regfile.rx_count),
       .busy_in        (u_wrap.u_dut.u_regfile.busy_in),
