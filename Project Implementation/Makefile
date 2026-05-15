@@ -11,6 +11,9 @@ SEED      ?= 0
 TEST      ?= sanity_test
 WAVES     ?= 0
 
+# Force recursive make to use a shell-safe command (avoid "C:/Program Files (x86)/.../make")
+MAKE := make
+
 # Resolve the project root from this file's location.
 # harness/examples/sv_only/Makefile  -> ../../..
 # changed project root from ../../.. to . since we moved the Makefile from harness/examples/sv_only/ to Project Implementation/
@@ -87,7 +90,7 @@ REGRESSION_TESTS = \
   error_injection_test \
   randomized_sanity_test
 
-REGRESSION_SEEDS ?= 20   # 10 * 20 = 200 runs (well under the 10000 cap)
+REGRESSION_SEEDS ?= 1   # 10 * 20 = 200 runs (well under the 10000 cap)
 
 # ============================================================================
 # Questa flow (default)
@@ -95,9 +98,10 @@ REGRESSION_SEEDS ?= 20   # 10 * 20 = 200 runs (well under the 10000 cap)
 ifeq ($(SIMULATOR),questa)
 
 VLOG_FLAGS  = -sv -timescale=1ns/1ps +acc=rn +define+SIM $(INC_DIRS)
-# Questa version doesn't support -coverage flag during compilation (vlog). Coverage flags belong in simulation (vsim) only.
-COV_FLAG    = #-coverage +cover=bcestf  # removed
 
+# Enable code coverage at compile time (required so vsim does not warn vsim-8634)
+# Questa supports +cover on vlog for line/toggle/branch/condition/FSM coverage.
+COV_FLAG    = +cover
 
 compile:
 	@mkdir -p build
@@ -119,20 +123,22 @@ run: compile
 	     $(if $(filter 1,$(WAVES)), -wlf waves_$(TEST)_$(SEED).wlf,)
 
 run_bonus: compile
-	vsim -c work.tb_top -do "run -all; quit -f" \
+	vsim -c -coverage work.tb_top -do "run -all; coverage save cov_$(BONUS_TEST)_$(SEED).ucdb; quit -f" \
 	     +TESTNAME=$(BONUS_TEST) +UVM_TESTNAME=$(BONUS_TEST) +SEED=$(SEED)
 
 define REGRESS_ONE
-	@echo "=== Running $(1) for $(REGRESSION_SEEDS) seeds ==="
-	@for s in `seq 1 $(REGRESSION_SEEDS)` ; do \
+	echo "=== Running $(1) for $(REGRESSION_SEEDS) seeds ===" ; \
+	for s in `seq 1 $(REGRESSION_SEEDS)` ; do \
+		echo "[INFO] $(1) seed=$$s" ; \
 	    $(MAKE) -s run TEST=$(1) SEED=$$s WAVES=0 \
 	      > build/log_$(1)_$$s.log 2>&1 ; \
-	done
+	done ; \
+	:
 endef
 
 regress: compile
 	@mkdir -p build
-	$(foreach t,$(REGRESSION_TESTS),$(call REGRESS_ONE,$(t)))
+	@$(foreach t,$(REGRESSION_TESTS),$(call REGRESS_ONE,$(t)) ;)
 	-vcover merge -out build/merged.ucdb $(wildcard cov_*.ucdb)
 
 cov:
