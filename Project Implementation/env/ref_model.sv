@@ -201,6 +201,34 @@ class spi_ref_model;
     end
   endtask
 
+  // ------------------------- Prediction wrapper (for test compatibility) --------------------------
+  task predict_transfer(input bit [31:0] tx_word, input int width = 8,
+                        input bit [31:0] miso_word = 32'h0);
+    // Default: loopback mode for delay_transfer_test (MISO driven by BFM as dummy echo)
+    predict_word(.tx_word(tx_word), .width_bits(width), .loopback(1'b0), .miso_word(miso_word));
+  endtask
+
+  // ------------------------- RX FIFO state management --------------------------
+  // Simple queue to track expected RX entries for drain verification
+  bit [31:0] rx_queue[$];
+
+  task push_rx_expected(input bit [31:0] expected_word);
+    rx_queue.push_back(expected_word);
+  endtask
+
+  task pop_rx();
+    if (rx_queue.size() > 0) begin
+      void'(rx_queue.pop_front());
+    end else begin
+      $display("[CHECKER_ERROR] ref_model: pop_rx() called on empty expected queue");
+      error_count++;
+    end
+  endtask
+
+  function int rx_queue_size();
+    return rx_queue.size();
+  endfunction
+
   // ------------------------------------------------------------------
   // Reset helper: applies spec-compliant reset sequence
   // Spec Section 7.1: 

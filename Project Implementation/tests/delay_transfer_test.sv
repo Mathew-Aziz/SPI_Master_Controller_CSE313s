@@ -106,8 +106,9 @@ class delay_transfer_test;
 
   static task drain_rx(input int num_words, ref spi_ref_model ref_model);
     for (int i = 0; i < num_words; i++) begin
-      void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
-      ref_model.pop_rx();
+      bit [31:0] rx_data;
+      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_data);  // Capture read value
+      ref_model.verify_rx_drain(.observed(rx_data), .width(8));  // Check + pop
     end
   endtask
 
@@ -192,7 +193,7 @@ class delay_transfer_test;
 
       foreach (tx_words[j]) begin
         word = tx_words[j];
-        ref_model.predict_transfer(.tx_word(word), .width(8));
+        ref_model.predict_transfer(.tx_word(word), .width(8), .miso_word(32'h00), .loopback(1'b0));
         tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
       end
 
@@ -224,7 +225,7 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd0);
     coverage.sample_delay(.delay_val(8'd0), .queued(1'b0));
 
-    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8));
+    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8), .miso_word(32'h00));
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[0]);
 
     wait_for_busy_set(busy_set_result, TIMEOUT_CYCLES);
