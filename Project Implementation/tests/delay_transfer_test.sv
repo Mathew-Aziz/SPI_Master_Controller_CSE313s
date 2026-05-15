@@ -3,11 +3,25 @@
 `define DELAY_TRANSFER_TEST_SV 
 
 
-localparam int TIMEOUT_CYCLES = 2_500_000;
-localparam int IDLE_MEASURE_TIMEOUT = 200_000;
-localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1
-localparam SS_EN0 = 32'h0000_0001;
-localparam SS_DISABLE = 32'h0000_0000;
+`ifdef TIMEOUT_CYCLES
+  localparam int TIMEOUT_CYCLES = 2_500_000;
+`endif
+
+`ifdef IDLE_MEASURE_TIMEOUT
+  localparam int IDLE_MEASURE_TIMEOUT = 200_000;
+`endif
+
+`ifdef CTRL_DEFAULT
+  localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1
+`endif
+
+`ifdef SS_EN0
+  localparam SS_EN0 = 32'h0000_0001;
+`endif
+
+`ifdef SS_DISABLE
+  localparam SS_DISABLE = 32'h0000_0000;
+`endif
 
 class delay_transfer_test;
 
