@@ -20,25 +20,41 @@ localparam SS_EN0 = 32'h0000_0001;
 localparam SS_DISABLE = 32'h0000_0000;
 
 class delay_transfer_test;
+  static int div_value = 1;
 
   static function int measure_idle_pclk(int timeout = IDLE_MEASURE_TIMEOUT);
+    int unsigned count = 0;
+    logic cpol = tb_top.bfm_mode[1];  // CPOL is MODE[1] (R4): 0 for Mode 0/1, 1 for Mode 2/3
+    int unsigned half_cycle_pclk = div_value + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
+    
     while (timeout > 0) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) break;
+      
+      // Check if SCLK is at the idle level defined by CPOL
+      if (tb_top.u_wrap.u_dut.u_core.sclk == cpol) begin
+        repeat (half_cycle_pclk) @(posedge tb_top.PCLK);
+        if (tb_top.u_wrap.u_dut.u_core.sclk == cpol) begin
+          break;  // Confirmed: SCLK stable at idle -> idle gap started
+        end
+      end
       timeout--;
     end
-    if (timeout == 0) return -1;
-
-    int count = 0;
+    if (timeout == 0) return -1;  // Timeout waiting for idle start
+    
+    // R21: BUSY remains 1 throughout; we rely on SCLK edge detection for robustness
     while (timeout > 0) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) break;  // BUSY re-asserted
+      
+      if (tb_top.u_wrap.u_dut.u_core.sclk != cpol) begin
+        return count;  // Return observed idle PCLK count
+      end
+      
       count++;
       timeout--;
     end
-    if (timeout == 0) return -1;
-
-    return count;
+    
+    // Timeout: next transfer never started (possible bug or test issue)
+    return -1;
   endfunction
 
   static task drain_rx(input int num_words, ref spi_ref_model ref_model);
@@ -47,7 +63,6 @@ class delay_transfer_test;
       ref_model.pop_rx();
     end
   endtask
-
 
   static function int wait_for_busy_set(int timeout = TIMEOUT_CYCLES);
     for (int i = 0; i < timeout; i++) begin
@@ -62,7 +77,7 @@ class delay_transfer_test;
   static function int wait_for_busy_clear(int timeout = TIMEOUT_CYCLES);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) return 1;
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) return 1;
     end
 
     $display("[CHECKER_ERROR] delay_transfer: timeout waiting for BUSY=0");
@@ -74,12 +89,10 @@ class delay_transfer_test;
     @(posedge tb_top.PCLK);
   endtask
 
-
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
-    // TODO:
     // DELAY= 0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
-
     $display("[INFO] delay_transfer_test: starting");
+
     // --- Phase 1: Reset & Init ---
     tb_top.PRESETn = 0;
     repeat (5) @(posedge tb_top.PCLK);
@@ -88,29 +101,30 @@ class delay_transfer_test;
 
     tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
-    tb_top.bfm_pattern   = EDGE_DETECTION_PATTERN;
+    coverage.sample_config(.mode(2'b00), .lsb_first(0), .width(2'b00));
 
     tb_top.u_apb_bfm.apb_write(APB_CTRL, CTRL_DEFAULT);  // EN=1, MSTR=1, MODE=0, WIDTH=8
-    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, SS_DISABLE);  // DIV=0 baseline
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 16'd1); 
+    coverage.sample_clk_div(16'd1);
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);  // SS_EN[0]=1, SS_VAL[0]=0
 
-    int div_value = 1;
+    int number_of_words = 3;
+    byte tx_words[number_of_words] = '{8'hA5, 8'h3C, 8'h78};
 
     // --- Phase 2: Idle Cycle Verification ---
-    int delay_values  [$] = '{0, 1, 200};
+    int delay_values[$] = '{0, 1, 200};
     foreach (delay_values[i]) begin
       int delay_value = delay_values[i];
-      int expected_idle_pclk = div_value * (div_value + 1);
+      int expected_idle_pclk = delay_value * (div_value + 1);
 
       // Update delay value
       tb_top.u_apb_bfm.apb_write(APB_DELAY, delay_value);
-      coverage.sample_delay();
+      coverage.sample_delay(.delay_val(delay_value), .queued(1'b1));
 
       // Predict + queue TX words
-      int number_of_words = 3;
-      byte tx_words[number_of_words] = '{8'hA5, 8'h3C, 8'h78};
-      foreach (tx_words[word]) begin
-        ref_model.predit_transfer(.tx_word(word), .width(8));
+      foreach (tx_words[i]) begin
+        byte word = tx_words[i];
+        ref_model.predict_transfer(.tx_word(word), .width(8));
         tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
       end
 
@@ -166,9 +180,10 @@ class delay_transfer_test;
     // Write new DELAY mid-transfer
     int new_delay = 50;
     tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
+    coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
-    ref_model.predit_transfer(.tx_word(tx_words[0]), .width(8));
+    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8));
     ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8));
 
     // Measure first gap (old delay expected)
