@@ -12,16 +12,6 @@
 `ifndef SPI_REF_MODEL_SV
 `define SPI_REF_MODEL_SV 
 
-localparam [7:0] APB_CTRL = 8'h00;
-localparam [7:0] APB_STATUS = 8'h04;
-localparam [7:0] APB_TX_DATA = 8'h08;
-localparam [7:0] APB_RX_DATA = 8'h0C;
-localparam [7:0] APB_CLK_DIV = 8'h10;
-localparam [7:0] APB_SS_CTRL = 8'h14;
-localparam [7:0] APB_INT_EN = 8'h18;
-localparam [7:0] APB_INT_STAT = 8'h1C;
-localparam [7:0] APB_DELAY = 8'h20;
-
 
 class spi_ref_model;
 
@@ -174,13 +164,13 @@ class spi_ref_model;
   //Drain TX FIFO
   task drain_tx_fifo();
     bit [31:0] rd = 0;
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
+    tb_top.u_apb_bfm.apb_write(32'h14, 32'h0000_0001);
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      tb_top.u_apb_bfm.apb_read(32'h04, rd);
       if (rd[0] == 1'b0) break;
     end
     check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
+    tb_top.u_apb_bfm.apb_write(32'h14, 32'h0000_0000);  // deassert ss[0] HIGH
   endtask
 
   // ------------------------- Spec edge-case checks --------------------------

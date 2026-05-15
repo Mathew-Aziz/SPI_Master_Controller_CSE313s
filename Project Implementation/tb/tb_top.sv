@@ -13,9 +13,9 @@
 // =============================================================================
 
 `timescale 1ns / 1ps
+`include "sequences/stim_lib.sv"
 `include "env/ref_model.sv"
 `include "env/coverage.sv"
-`include "sequences/stim_lib.sv"
 `include "tests/sanity_test.sv"
 `include "tests/randomized_sanity_test.sv"
 `include "tests/clk_div_corner_test.sv"
