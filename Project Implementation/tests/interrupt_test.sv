@@ -21,17 +21,40 @@ class interrupt_test;
 
     bit [31:0] rd = 0;
 
+    // -------------------------------------------------------------------------
+    // Local APB wrappers: BFM + coverage sampling (R1/R22)
+    // -------------------------------------------------------------------------
+    task automatic apb_wr(input bit [7:0] addr, input bit [31:0] data);
+      tb_top.u_apb_bfm.apb_write(addr, data);
+      coverage.sample_apb(.addr(addr),
+                          .is_write(1'b1),
+                          .wdata(data),
+                          .rdata(32'h0),
+                          .pslverr(1'b0),
+                          .pready(1'b1));
+    endtask
+
+    task automatic apb_rd(input bit [7:0] addr, output bit [31:0] data);
+      tb_top.u_apb_bfm.apb_read(addr, data);
+      coverage.sample_apb(.addr(addr),
+                          .is_write(1'b0),
+                          .wdata(32'h0),
+                          .rdata(data),
+                          .pslverr(1'b0),
+                          .pready(1'b1));
+    endtask
+
     tb_top.bfm_mode      = 2'b00;  // CPOL=0 CPHA=0
     tb_top.bfm_pattern   = 8'hA5;
     tb_top.bfm_width     = 2'b00;  // 8-bit
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 32'h0000_00A5;  // matches bfm_pattern
 
-    tb_top.u_apb_bfm.apb_write(APB_CTRL, 32'h0000_0003);  // EN, MSTR
-    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 32'h0000_0004);  // divide /4
+    apb_wr(APB_CTRL, 32'h0000_0003);  // EN, MSTR
+    apb_wr(APB_CLK_DIV, 32'h0000_0004);  // divide /4
+    coverage.sample_clk_div(16'h0004);
 
-
-    coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00));
+    coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
 
     // TODO:
     // For each interrupt source:
@@ -41,336 +64,344 @@ class interrupt_test;
     // - clear via W1C (R17)
     // - W1C race (R18)
 
-  //*======================TX_OVF IRQ test=========================
+    //*======================TX_OVF IRQ test=========================
 
-    //1. W1C all IRQs in INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
+    apb_wr(APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    //2. Enable TX_OVF IRQ in INT_EN
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0004);  // Enable only TX_OVF
-    //3. Fill TX FIFO to trigger TX_OVF condition
+    apb_wr(APB_INT_EN, 32'h0000_0004);  // Enable only TX_OVF
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
     for (int i = 0; i < 12; i++) begin
-      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'(i));
-      if(tb_top.spi.cb_mon.irq == 1'b1) break;
+      apb_wr(APB_TX_DATA, 32'(i));
+      if (tb_top.spi.cb_mon.irq == 1'b1) break;
     end
-    //4. Check INT_STAT for TX_OVF bit set twice to check sticky behavior
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
-      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);  
+    coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
+
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
-    
-    if(tb_top.spi.cb_mon.irq != 1'b1)
+
+    if (tb_top.spi.cb_mon.irq != 1'b1)
       ref_model.checker_error("Interrupt test", "TX_OVF IRQ not asserted when TX_OVF condition met");
-  
-    //5. Clear TX_OVF bit via W1C and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0004);
 
-    //6. Mask TX_OVF IRQ in INT_EN 
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000); 
+    apb_wr(APB_INT_STAT, 32'h0000_0004); // W1C clear
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b00100), .w1c_race_mask(5'b0));
 
-    //drain the FIFO to reset state for next test
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  
-      repeat (500) begin
-        tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-        if (rd[0] == 1'b0) break;
-      end
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
+    apb_wr(APB_INT_EN, 32'h0000_0000); // Mask TX_OVF
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    //7. Trigger condition again and confirm no IRQ asserted
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
+    // drain FIFO
+    apb_wr(APB_SS_CTRL, 32'h0000_0001);  
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    repeat (500) begin
+      apb_rd(APB_STATUS, rd);
+      if (rd[0] == 1'b0) break;
+    end
+
+    apb_wr(APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
     for (int i = 0; i <= 8; i++) begin
-      tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'(i));
-      if(tb_top.spi.cb_mon.irq == 1'b1)begin
+      apb_wr(APB_TX_DATA, 32'(i));
+      if (tb_top.spi.cb_mon.irq == 1'b1) begin
         ref_model.checker_error("Interrupt test", "TX_OVF IRQ is asserted despite being masked");
         break;
-      end 
-    end
-
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
-      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
-    end
-
-    //W1C Race (deterministic): backdoor-clear then trigger TX push
-    // Clear INT_STAT TX_OVF bit via backdoor so the subsequent APB TX push
-    // is sampled against the cleared value on the same PCLK edge.
-    tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00100;
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF);
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
-    ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
-
-    //drain the FIFO to reset state for next test
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);  
-      repeat (500) begin
-        tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-        if (rd[0] == 1'b0) break;
       end
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
+    end
 
-//*======================TRANSFER_DONE IRQ test=========================
-    //1. W1C all IRQs in INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
-    
-    //2. Enable TRANSFER_DONE IRQ in INT_EN
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0010);
-    
-    //3. make a transfer to trigger TRANSFER_DONE
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'h0000_00FF);
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001); 
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    end
 
-    // Wait for transfer to complete (BUSY goes LOW)
+    // W1C Race (deterministic): backdoor-clear then trigger TX push
+    tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00100;
+    apb_wr(APB_TX_DATA, 32'hDEAD_BEEF);
+    apb_rd(APB_INT_STAT, rd);
+    ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b00100), .w1c_race_mask(5'b00100));
+
+    // drain FIFO
+    apb_wr(APB_SS_CTRL, 32'h0000_0001);  
+    coverage.sample_ss(4'b0001, 4'b0000);
+
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[0] == 1'b0) break;  // BUSY bit goes low
+      apb_rd(APB_STATUS, rd);
+      if (rd[0] == 1'b0) break;
     end
-    if(tb_top.spi.cb_mon.irq != 1'b1)
+    apb_wr(APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    //*======================TRANSFER_DONE IRQ test=========================
+
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_INT_EN, 32'h0000_0010);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_TX_DATA, 32'h0000_00FF);
+    apb_wr(APB_SS_CTRL, 32'h0000_0001); 
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    repeat (500) begin
+      apb_rd(APB_STATUS, rd);
+      if (rd[0] == 1'b0) break;
+    end
+    coverage.sample_busy(1'b0, 2'b00);
+
+    if (tb_top.spi.cb_mon.irq != 1'b1)
       ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ not asserted after transfer completion");
 
-    //4. Check INT_STAT for TRANSFER_DONE bit set twice to check sticky behavior
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE", 8'b0001_0000, rd, 8'b0001_0000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b10000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
-    if(tb_top.spi.cb_mon.irq != 1'b1)
-      ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ not asserted after transfer completion");
-
-    //5. Clear TRANSFER_DONE bit via W1C and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0010);
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+    apb_wr(APB_INT_STAT, 32'h0000_0010);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b10000), .w1c_race_mask(5'b0));
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ not deasserted after W1C clear");
 
-    //6. Mask TRANSFER_DONE IRQ in INT_EN 
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000);
+    apb_wr(APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    //7. Trigger condition again and confirm no IRQ asserted
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F);
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'h0000_00AA);
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001);
+    apb_wr(APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_TX_DATA, 32'h0000_00AA);
+    apb_wr(APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
 
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      apb_rd(APB_STATUS, rd);
       if (rd[0] == 1'b0) break;
     end
 
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted despite being masked");
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE_masked", 8'b0001_0000, rd, 8'b0001_0000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
-    //W1C Race (deterministic): backdoor-clear then trigger transfer
-    // Clear TRANSFER_DONE bit via backdoor before starting new transfer
+    // W1C Race (deterministic): backdoor-clear then trigger transfer
     tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b10000;
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF);
+    apb_wr(APB_TX_DATA, 32'hDEAD_BEEF);
 
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      apb_rd(APB_STATUS, rd);
       if (rd[0] == 1'b0) break;
     end
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE_race", 8'b0001_0000, rd, 8'b0001_0000);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b10000), .w1c_race_mask(5'b10000));
 
-    //deassert SS to reset state for next test
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
-    
-//==================Tx_EMPTY IRQ test=============================
+    apb_wr(APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
 
-    //1. W1C all IRQs in INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
-   
-    //2. Enable TX_EMPTY IRQ in INT_EN
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0001);
-   
-    //3. make a transfer to trigger TX_EMPTY condition
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'h0000_00FF);
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    //==================TX_EMPTY IRQ test=============================
+
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_INT_EN, 32'h0000_0001);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_TX_DATA, 32'h0000_00FF);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
 
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001); 
-     
+    apb_wr(APB_SS_CTRL, 32'h0000_0001); 
+    coverage.sample_ss(4'b0001, 4'b0000);
+
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      apb_rd(APB_STATUS, rd);
       if (rd[0] == 1'b0) break;
     end
 
-    if(tb_top.spi.cb_mon.irq != 1'b1)
+    if (tb_top.spi.cb_mon.irq != 1'b1)
       ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ not asserted when TX_EMPTY condition met");
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00001), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
-    //deassert SS to reset state
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000); 
-    
-    //4. Clear TX_EMPTY bit via W1C and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+
+    apb_wr(APB_SS_CTRL, 32'h0000_0000); 
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ not deasserted after W1C clear");
 
-    //5. Mask TX_EMPTY IRQ in INT_EN 
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000);
+    apb_wr(APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    //6. Trigger condition again and confirm no IRQ asserted 
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'h0000_00FF);
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    apb_wr(APB_TX_DATA, 32'h0000_00FF);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
 
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0001); 
-     
+    apb_wr(APB_SS_CTRL, 32'h0000_0001); 
+    coverage.sample_ss(4'b0001, 4'b0000);
+
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
+      apb_rd(APB_STATUS, rd);
       if (rd[0] == 1'b0) break;
     end
 
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted despite being masked");
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
-    //!W1C Race (deterministic): backdoor-clear then trigger TX push (Not Sure of Implmentation)
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, 32'hDEAD_BEEF);
+    // W1C Race (deterministic): backdoor-clear then trigger TX push
+    apb_wr(APB_TX_DATA, 32'hDEAD_BEEF);
 
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[0] == 1'b0)begin
+      apb_rd(APB_STATUS, rd);
+      if (rd[0] == 1'b0) begin
         tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00001;
         break;
       end 
     end
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b00001), .w1c_race_mask(5'b00001));
 
-    //deassert SS to reset state for next test
-    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, 32'h0000_0000);
-    
-//================== RX_FULL IRQ test ====================
+    apb_wr(APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
 
-    //1. W1C all IRQs in INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
-  
-    //2. Enable RX_FULL IRQ in INT_EN
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0002);
-    
-    //3. Fill RX FIFO to trigger RX_FULL condition
-    //Empty RX FIFO by reading until empty
+    //================== RX_FULL IRQ test ====================
+
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_INT_EN, 32'h0000_0002);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00010), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
     repeat (20) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
-
-      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+      apb_rd(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;
+      apb_rd(APB_RX_DATA, rd);
     end
-    
+
     for (int i = 0; i < 8; i++)
       tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h1000_0000 + i;
-  
     tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
-    //4. Check IRQ and INT_STAT for RX_FULL bit set twice to check sticky behavior
-    if(tb_top.spi.cb_mon.irq != 1'b1)
+
+    if (tb_top.spi.cb_mon.irq != 1'b1)
       ref_model.checker_error("Interrupt test", "RX_FULL IRQ not asserted when RX_FULL condition met");
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT", 8'b0000_0010, rd, 8'b0000_0010);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
-    //5. Disable RX_FULL bit via INT_EN and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000); 
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+    apb_wr(APB_INT_EN, 32'h0000_0000); 
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "RX_FULL IRQ not deasserted after masking in INT_EN");
-    
-    //6. W1C RX_FULL bit via INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0002); 
-    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0002);
-    if(tb_top.spi.cb_mon.irq == 1'b1)
+
+    apb_wr(APB_INT_EN, 32'h0000_0002); 
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    apb_rd(APB_RX_DATA, rd);
+    apb_wr(APB_INT_STAT, 32'h0000_0002);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010), .w1c_mask(5'b00010), .w1c_race_mask(5'b0));
+    if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "RX_FULL IRQ asserted after W1C clear");
 
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
-      ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0010);
-    
-    //7. Race W1C clear vs new event
+    apb_rd(APB_INT_STAT, rd);
+    ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0010);
+
     tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00010;
     tb_top.u_wrap.u_dut.u_regfile.rx_mem[7] = 32'h2000_0007;
     tb_top.u_wrap.u_dut.u_regfile.rx_wp++;
-       
 
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0010, rd, 8'b0000_0010);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010), .w1c_mask(5'b00010), .w1c_race_mask(5'b00010));
 
-    // Empty RX FIFO by reading until empty for next test
     repeat (20) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
-
-      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+      apb_rd(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;
+      apb_rd(APB_RX_DATA, rd);
     end
 
     //================== RX_OVF IRQ test ====================
-    //1. W1C all IRQs in INT_STAT
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_001F); 
 
-    //2. Enable RX_OVF IRQ in INT_EN
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0008);
-    
-    //3. Fill RX FIFO to trigger RX_OVF condition
-    //Empty RX FIFO by reading until empty
+    apb_wr(APB_INT_STAT, 32'h0000_001F); 
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(APB_INT_EN, 32'h0000_0008);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b01000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
     repeat (20) begin
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, rd);
-      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
-
-      tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rd);
+      apb_rd(APB_STATUS, rd);
+      if (rd[4] == 1'b1) break;
+      apb_rd(APB_RX_DATA, rd);
     end
 
-     for (int i = 0; i <= 8; i++)
+    for (int i = 0; i <= 8; i++)
       tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h1000_0000 + i;
-  
+
     tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h9;
-    //4. Check INT_STAT for RX_OVF bit set twice to check sticky behavior
-    
+
     if (tb_top.spi.cb_mon.irq != 1'b1)
       ref_model.checker_error("Interrupt test", "RX_OVF IRQ not asserted when RX FIFO overflows");
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
       ref_model.check_reg_masked("INT_STAT_RX_OVF", 8'b0000_1000, rd, 8'b0000_1000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b01000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
-    //5. Clear RX_OVF bit via W1C and confirm deassertion
-    tb_top.u_apb_bfm.apb_write(APB_INT_STAT, 32'h0000_0008);  // W1C RX_OVF
 
-    // Verify IRQ is deasserted
+    apb_wr(APB_INT_STAT, 32'h0000_0008);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b01000), .w1c_mask(5'b01000), .w1c_race_mask(5'b0));
+
     if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "RX_OVF IRQ not deasserted after W1C clear");
 
-    //6. Mask RX_OVF IRQ in INT_EN 
-    tb_top.u_apb_bfm.apb_write(APB_INT_EN, 32'h0000_0000);
-  
-    //7. Trigger condition again and confirm no IRQ asserted 
-    tb_top.u_wrap.u_dut.u_regfile.rx_mem[8] = 32'hBEEF_DEAD;  // Overflow data
+    apb_wr(APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    tb_top.u_wrap.u_dut.u_regfile.rx_mem[8] = 32'hBEEF_DEAD;
     tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
 
-    repeat(2)begin
-      tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
-      ref_model.check_reg_masked("INT_STAT_RX_OVF_masked", 8'b0000_1000, rd, 8'b0000_1000);  
+    repeat (2) begin
+      apb_rd(APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT_RX_OVF_masked", 8'b0000_1000, rd, 8'b0000_1000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
     if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "RX_OVF IRQ asserted despite being masked");
 
-    //8. Race W1C clear vs new event
     tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b01000;
     tb_top.u_wrap.u_dut.u_regfile.rx_mem[8] = 32'h2000_0007;
     tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
 
-    // Verify RX_OVF is set again due to the new event
-    tb_top.u_apb_bfm.apb_read(APB_INT_STAT, rd);
+    apb_rd(APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT_RX_OVF_race", 8'b0000_1000, rd, 8'b0000_1000);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b01000), .w1c_race_mask(5'b01000));
 
   endtask
 
