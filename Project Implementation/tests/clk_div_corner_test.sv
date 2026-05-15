@@ -20,15 +20,15 @@ localparam int CLK_DIV_MID_MEASURE_TIMEOUT = 5_000;
 `endif
 
 `ifndef CLK_DIV_CTRL_DEFAULT
-localparam CLK_DIV_CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
+localparam bit [31:0] CLK_DIV_CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
 `endif
 
 `ifndef CLK_DIV_SS_EN0
-localparam CLK_DIV_SS_EN0 = 32'h0000_0001;
+localparam int CLK_DIV_SS_EN0 = 32'h0000_0001;
 `endif
 
 `ifndef CLK_DIV_SS_DISABLE
-localparam CLK_DIV_SS_DISABLE = 32'h0000_0000;
+localparam int CLK_DIV_SS_DISABLE = 32'h0000_0000;
 `endif
 
 class clk_div_corner_test;
