@@ -52,6 +52,7 @@ class clk_div_corner_test;
                                   ref spi_coverage_col coverage);
     // Helper: measure full SCLK period in PCLK cycles
     int count = 0;
+    period = -1; // Error unless changed
     wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
 
     @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
@@ -59,7 +60,7 @@ class clk_div_corner_test;
       @(posedge tb_top.PCLK);
       if (++count > timeout) begin
         $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout");
-        return -1;
+        return;
       end
     end
     period = 2 * count;
