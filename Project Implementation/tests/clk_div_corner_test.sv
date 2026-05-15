@@ -67,18 +67,21 @@ class clk_div_corner_test;
   static task test_mid_transfer_div_update(ref spi_ref_model ref_model,
                                            ref spi_coverage_col coverage);
     int old_div_value = 1;
+    int new_div_value = 10;
+    int mid_period;
+    int next_period;
+
     apb_wr(APB_CLK_DIV, old_div_value, coverage);
     coverage.sample_clk_div(old_div_value[15:0]);
 
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
     if (!wait_for_busy_set(TIMEOUT_CYCLES)) ref_model.error_count++;
 
-    int new_div_value = 10;
     apb_wr(APB_CLK_DIV, new_div_value, coverage);  // Write new DIV while transfer is active
     coverage.sample_clk_div(new_div_value[15:0]);
 
     // Check Current Transfer
-    int mid_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
+    mid_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
@@ -92,7 +95,7 @@ class clk_div_corner_test;
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
     if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
 
-    int next_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
+    next_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
     if (next_period != 2 * (new_div_value + 1)) begin
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
@@ -122,7 +125,10 @@ class clk_div_corner_test;
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
     // Attempt mid-transfer DIV update to validate sampled-at-start (R25).
-    int  div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int div_value;
+    int expected_period;
+    int measured_period;
     byte rx_data;
     // --- Phase 1: BFM & Register Init ---    
     $display("[INFO] clk_div_corner_test: starting");
@@ -146,10 +152,9 @@ class clk_div_corner_test;
     coverage.sample_ss(4'b0001, 4'b0000);
 
     // --- Phase 2: Corner Cases ---
-
-
     foreach (div_corners[i]) begin
-      int div_value = div_corners[i];
+      div_value = div_corners[i];
+      expected_period = 2 * (div_value + 1);
 
       apb_wr(APB_CLK_DIV, div_value, coverage);
       coverage.sample_clk_div(div_value[15:0]);
@@ -158,8 +163,7 @@ class clk_div_corner_test;
       send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, TIMEOUT_CYCLES, coverage);
 
       // Measure SCLK period
-      int measured_period = measure_sclk_period();
-      int expected_period = 2 * (div_value + 1);
+      measured_period = measure_sclk_period();
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);
