@@ -230,13 +230,15 @@ class spi_ref_model;
   endfunction
 
   task verify_rx_drain(input bit [31:0] observed, input int width = 8);
+    bit [31:0] expected = rx_queue.pop_front();
+    bit [31:0] mask = mask_from_width(width);
+
     if (rx_queue.size() == 0) begin
       $display("[CHECKER_ERROR] ref_model: verify_rx_drain() called on empty queue");
       error_count++;
       return;
     end
-    bit [31:0] expected = rx_queue.pop_front();
-    bit [31:0] mask = mask_from_width(width);
+
     if ((observed & mask) !== (expected & mask)) begin
       $display("[SCOREBOARD_ERROR] RX mismatch: width=%0d expected=0x%08h observed=0x%08h", width,
                expected & mask, observed & mask);
