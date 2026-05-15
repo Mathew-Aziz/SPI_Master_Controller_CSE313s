@@ -2,24 +2,23 @@
 `ifndef DELAY_TRANSFER_TEST_SV
 `define DELAY_TRANSFER_TEST_SV 
 
-
-`ifdef TIMEOUT_CYCLES
+`ifndef TIMEOUT_CYCLES
   localparam int TIMEOUT_CYCLES = 2_500_000;
 `endif
 
-`ifdef IDLE_MEASURE_TIMEOUT
+`ifndef IDLE_MEASURE_TIMEOUT
   localparam int IDLE_MEASURE_TIMEOUT = 200_000;
 `endif
 
-`ifdef CTRL_DEFAULT
+`ifndef CTRL_DEFAULT
   localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1
 `endif
 
-`ifdef SS_EN0
+`ifndef SS_EN0
   localparam SS_EN0 = 32'h0000_0001;
 `endif
 
-`ifdef SS_DISABLE
+`ifndef SS_DISABLE
   localparam SS_DISABLE = 32'h0000_0000;
 `endif
 
@@ -35,6 +34,7 @@ class delay_transfer_test;
     logic        cpol = tb_top.bfm_mode[1];  // CPOL: MODE[1] (R4)
     int unsigned div_val = get_div_value();
     int unsigned half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
+    int unsigned count = half_cycle_pclk;
 
     // Wait for SCLK to reach idle level, confirmed stable for one half-cycle
     while (timeout > 0) begin
@@ -49,7 +49,6 @@ class delay_transfer_test;
 
     // Count idle PCLKs until SCLK leaves idle level.
     // Start at half_cycle_pclk to account for the confirmation window already elapsed.
-    int unsigned count = half_cycle_pclk;
     while (timeout > 0) begin
       @(posedge tb_top.PCLK);
 
@@ -71,6 +70,7 @@ class delay_transfer_test;
   // For DELAY>0, allows 1 PCLK sync skew tolerance.
   static function void check_idle_gap(int observed, int expected, int delay_value, int gap_index,
                                       ref spi_ref_model ref_model);
+    int difference;
     if (observed == -1) begin
       $display("[CHECKER_ERROR] delay_transfer: idle measurement timeout (DELAY=%0d, gap=%0d)",
                delay_value, gap_index);
@@ -86,7 +86,7 @@ class delay_transfer_test;
         ref_model.error_count++;
       end
     end else begin
-      int difference = (observed > expected) ? observed - expected : expected - observed;
+      difference = (observed > expected) ? observed - expected : expected - observed;
       if (difference > 1) begin
         $display(
             "[SCOREBOARD_ERROR] delay_transfer: idle PCLK mismatch (DELAY=%0d, gap=%0d, expected=%0d, observed=%0d)",
@@ -121,30 +121,28 @@ class delay_transfer_test;
     return 0;
   endfunction
 
-  static task cleanup();
+  static task cleanup(ref spi_coverage_col coverage);
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_DISABLE);
+    coverage.sample_ss(4'b0000, 4'b0000);
     @(posedge tb_top.PCLK);
   endtask
 
-  static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
-                               input bit [31:0] data);
-    tb_top.u_apb_bfm.apb_write(addr, data);
-    coverage.sample_apb(.addr(addr), .is_write(1'b1), .wdata(data), .rdata(32'h0), .pslverr(1'b0),
-                        .pready(1'b1));
-  endtask
-
-  static task automatic apb_rd(ref spi_coverage_col coverage, input bit [7:0] addr,
-                               output bit [31:0] data);
-    tb_top.u_apb_bfm.apb_read(addr, data);
-    coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
-                        .pready(1'b1));
-  endtask
-
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
-    byte tx_words[3] = '{8'hA5, 8'h3C, 8'h78};
-    int delay_values[$] = '{0, 1, 200};
-
     // DELAY=0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
+
+    // --- Declarations (hoisted for QuestaSim compatibility) ---
+    byte         tx_words           [3] = '{8'hA5, 8'h3C, 8'h78};
+    int          delay_values       [$] = '{0, 1, 200};
+    int          delay_value;
+    int unsigned div_val;
+    int          expected_idle_pclk;
+    byte         word;
+    int          gap;
+    int          new_delay = 50;
+    int          second_gap;
+    int unsigned div_val_p3;
+    int          expected_second;
+
     $display("[INFO] delay_transfer_test: starting");
 
     // --- Phase 1: Reset & Init ---
@@ -157,31 +155,27 @@ class delay_transfer_test;
     tb_top.bfm_width     = 2'b00;  // 8-bit width
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 8'h00;  // Dummy echo
-
     coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
 
-    apb_wr(APB_CTRL, CTRL_DEFAULT);
-    apb_wr(APB_CLK_DIV, 16'd1);
+    tb_top.u_apb_bfm.apb_write(APB_CTRL, CTRL_DEFAULT);
+    tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, 16'd1);
     coverage.sample_clk_div(16'd1);
-
-    apb_wr(APB_SS_CTRL, SS_EN0);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
     coverage.sample_ss(4'b0001, 4'b0000);
-
-
 
     // --- Phase 2: Idle Cycle Verification ---
     foreach (delay_values[i]) begin
-      int          delay_value = delay_values[i];
-      int unsigned div_val = get_div_value();
-      int          expected_idle_pclk = delay_value * (div_val + 1);
+      delay_value        = delay_values[i];
+      div_val            = get_div_value();
+      expected_idle_pclk = delay_value * (div_val + 1);
 
-      apb_wr(APB_DELAY, delay_value);
+      tb_top.u_apb_bfm.apb_write(APB_DELAY, delay_value);
       coverage.sample_delay(.delay_val(delay_value), .queued(1'b1));
 
       foreach (tx_words[j]) begin
-        byte word = tx_words[j];
+        word = tx_words[j];
         ref_model.predict_transfer(.tx_word(word), .width(8));
-        apb_wr(APB_TX_DATA, word);
+        tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
       end
 
       if (!wait_for_busy_set()) begin
@@ -190,7 +184,7 @@ class delay_transfer_test;
       end
       coverage.sample_busy(1'b1, 2'b00);
 
-      for (int gap = 0; gap < 2; gap++) begin  // 2 gaps for 3 words
+      for (gap = 0; gap < 2; gap++) begin  // 2 gaps for 3 words
         check_idle_gap(.observed(measure_idle_pclk()), .expected(expected_idle_pclk),
                        .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
       end
@@ -199,45 +193,40 @@ class delay_transfer_test;
       coverage.sample_busy(1'b0, 2'b00);
 
       drain_rx(3, ref_model);
-      cleanup();
-      coverage.sample_ss(4'b0000, 4'b0000);
-
-      apb_wr(APB_SS_CTRL, SS_EN0);
+      cleanup(coverage);
+      tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
       coverage.sample_ss(4'b0001, 4'b0000);
     end
 
     // --- Phase 3: Mid-Transfer DELAY Update ---
     // Verifies that a DELAY write mid-transfer takes effect on the *next* inter-word gap.
-    apb_wr(APB_DELAY, 8'd0);
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd0);
     coverage.sample_delay(.delay_val(8'd0), .queued(1'b0));
 
-    byte tx_words_p3[3] = '{8'hA5, 8'h3C, 8'h78};
-
-    ref_model.predict_transfer(.tx_word(tx_words_p3[0]), .width(8));
-    apb_wr(APB_TX_DATA, tx_words_p3[0]);
+    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8));
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[0]);
 
     if (!wait_for_busy_set(TIMEOUT_CYCLES)) ref_model.error_count++;
     coverage.sample_busy(1'b1, 2'b00);
 
     // Update DELAY mid-transfer; should apply starting from the second inter-word gap
-    int new_delay = 50;
-    apb_wr(APB_DELAY, new_delay);
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
     coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
-    ref_model.predict_transfer(.tx_word(tx_words_p3[1]), .width(8));
-    apb_wr(APB_TX_DATA, tx_words_p3[1]);
+    ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8));
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
 
-    ref_model.predict_transfer(.tx_word(tx_words_p3[2]), .width(8));
-    apb_wr(APB_TX_DATA, tx_words_p3[2]);
+    ref_model.predict_transfer(.tx_word(tx_words[2]), .width(8));
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
 
     // First gap: DELAY was 0 when transfer started, expect no idle
     check_idle_gap(.observed(measure_idle_pclk()), .expected(0), .delay_value(0), .gap_index(0),
                    .ref_model(ref_model));
 
     // Second gap: new DELAY should be active
-    int          second_gap = measure_idle_pclk(IDLE_MEASURE_TIMEOUT);
-    int unsigned div_val_p3 = get_div_value();
-    int          expected_second = new_delay * (div_val_p3 + 1);
+    second_gap      = measure_idle_pclk(IDLE_MEASURE_TIMEOUT);
+    div_val_p3      = get_div_value();
+    expected_second = new_delay * (div_val_p3 + 1);
     check_idle_gap(.observed(second_gap), .expected(expected_second), .delay_value(new_delay),
                    .gap_index(1), .ref_model(ref_model));
 
@@ -245,8 +234,7 @@ class delay_transfer_test;
     coverage.sample_busy(1'b0, 2'b00);
 
     drain_rx(3, ref_model);
-    cleanup();
-    coverage.sample_ss(4'b0000, 4'b0000);
+    cleanup(coverage);
 
     $display("[INFO] delay_transfer_test: finished, errors=%0d", ref_model.error_count);
   endtask
