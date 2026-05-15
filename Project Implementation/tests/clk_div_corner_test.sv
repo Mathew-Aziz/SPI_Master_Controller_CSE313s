@@ -47,16 +47,17 @@ class clk_div_corner_test;
     coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
                         .pready(1'b1));
   endtask
-
   static task measure_sclk_period(input int timeout = CLK_DIV_MEASURE_TIMEOUT, output int period,
                                   ref spi_coverage_col coverage);
     // Helper: measure full SCLK period in PCLK cycles
     int count = 0;
     period = -1;  // Error unless changed
-    wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
 
-    @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
-    while (tb_top.u_wrap.u_dut.u_core.sclk == 1) begin
+    // NOTE: DUT core signal is SCLK (uppercase) in tb_top bind; 'sclk' was unresolved.
+    wait (tb_top.u_wrap.u_dut.u_core.SCLK == 0);
+
+    @(posedge tb_top.u_wrap.u_dut.u_core.SCLK);
+    while (tb_top.u_wrap.u_dut.u_core.SCLK == 1) begin
       @(posedge tb_top.PCLK);
       if (++count > timeout) begin
         $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout");
@@ -67,10 +68,14 @@ class clk_div_corner_test;
   endtask
 
   static task wait_for_busy_clear(input int timeout = 100_000, output int cleared);
+    bit [31:0] status;
     cleared = 0;  // timeout
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) begin
+
+      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+      if ((status & 1) == 0) begin
         cleared = 1;
         return;
       end  // busy cleared
@@ -80,10 +85,14 @@ class clk_div_corner_test;
   endtask
 
   static task wait_for_busy_set(input int timeout = 100_000, output int set);
+    bit [31:0] status;
     set = 0;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) begin
+
+      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+      if ((status & 1) == 1) begin
         set = 1;
         return;
       end

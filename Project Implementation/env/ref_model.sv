@@ -164,13 +164,19 @@ class spi_ref_model;
   //Drain TX FIFO
   task drain_tx_fifo();
     bit [31:0] rd = 0;
-    tb_top.u_apb_bfm.apb_write(32'h14, 32'h0000_0001);
+
+    // APB addresses are 8-bit in apb_master_bfm; use 8'h14/8'h04 not 32'h14/32'h04
+    tb_top.u_apb_bfm.apb_write(8'h14, 32'h0000_0001);
+
     repeat (500) begin
-      tb_top.u_apb_bfm.apb_read(32'h04, rd);
+      tb_top.u_apb_bfm.apb_read(8'h04, rd);
       if (rd[0] == 1'b0) break;
     end
-    check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
-    tb_top.u_apb_bfm.apb_write(32'h14, 32'h0000_0000);  // deassert ss[0] HIGH
+
+    // Mask argument should be 32-bit; keep it consistent width
+    check_reg_masked("STATUS", 32'h0000_0004, rd, 32'h0000_0004);
+
+    tb_top.u_apb_bfm.apb_write(8'h14, 32'h0000_0000);  // deassert ss[0] HIGH
   endtask
 
   // ------------------------- Spec edge-case checks --------------------------
@@ -181,7 +187,6 @@ class spi_ref_model;
       error_count++;
     end
   endtask
-
   task check_tx_data_read_zero(input [31:0] observed);
     if (observed !== 32'h0) begin
       $display("[SCOREBOARD_ERROR] TX_DATA read nonzero observed=0x%08h", observed);
@@ -230,14 +235,18 @@ class spi_ref_model;
   endfunction
 
   task verify_rx_drain(input bit [31:0] observed, input int width = 8);
-    bit [31:0] expected = rx_queue.pop_front();
-    bit [31:0] mask = mask_from_width(width);
+    bit [31:0] expected;
+    bit [31:0] mask;
 
+    // Must check BEFORE popping
     if (rx_queue.size() == 0) begin
       $display("[CHECKER_ERROR] ref_model: verify_rx_drain() called on empty queue");
       error_count++;
       return;
     end
+
+    expected = rx_queue.pop_front();
+    mask = mask_from_width(width);
 
     if ((observed & mask) !== (expected & mask)) begin
       $display("[SCOREBOARD_ERROR] RX mismatch: width=%0d expected=0x%08h observed=0x%08h", width,

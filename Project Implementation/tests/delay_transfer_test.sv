@@ -24,25 +24,32 @@ localparam SS_DISABLE = 32'h0000_0000;
 
 class delay_transfer_test;
 
-  static function int get_div_value();
-    return tb_top.u_apb_bfm.apb_read(APB_CLK_DIV) [15:0];
-  endfunction
+  // CONVERTED: function -> task (apb_read is a task with timing)
+  static task automatic get_div_value(output int div_value);
+    bit [31:0] rd;
+    tb_top.u_apb_bfm.apb_read(APB_CLK_DIV, rd);
+    div_value = rd[15:0];
+  endtask
 
   // Measures the number of PCLK cycles SCLK remains at idle level between transfers.
   // Returns -1 on timeout or if BUSY deasserts unexpectedly (R21 violation).
   // CONVERTED: function -> task (contains timing controls)
   static task measure_idle_pclk(output int result, input int timeout = IDLE_MEASURE_TIMEOUT);
     logic        cpol = tb_top.bfm_mode[1];  // CPOL: MODE[1] (R4)
-    int unsigned div_val = get_div_value();
-    int unsigned half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
-    int unsigned count = half_cycle_pclk;
+    int unsigned div_val;
+    int unsigned half_cycle_pclk;
+    int unsigned count;
+
+    get_div_value(div_val);
+    half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
+    count = half_cycle_pclk;
 
     // Wait for SCLK to reach idle level, confirmed stable for one half-cycle
     while (timeout > 0) begin
       @(posedge tb_top.PCLK);
-      if (tb_top.u_wrap.u_dut.u_core.sclk == cpol) begin
+      if (tb_top.u_wrap.u_dut.u_core.SCLK == cpol) begin
         repeat (half_cycle_pclk) @(posedge tb_top.PCLK);
-        if (tb_top.u_wrap.u_dut.u_core.sclk == cpol) break;
+        if (tb_top.u_wrap.u_dut.u_core.SCLK == cpol) break;
       end
       timeout--;
     end
@@ -54,15 +61,17 @@ class delay_transfer_test;
     // Count idle PCLKs until SCLK leaves idle level.
     // Start at half_cycle_pclk to account for the confirmation window already elapsed.
     while (timeout > 0) begin
+      bit [31:0] status;
       @(posedge tb_top.PCLK);
 
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1'b1) == 0) begin
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+      if ((status & 32'h1) == 0) begin
         $display("[CHECKER_ERROR] delay_transfer: BUSY deasserted during DELAY gap");
         result = -1;
         return;
       end
 
-      if (tb_top.u_wrap.u_dut.u_core.sclk != cpol) begin
+      if (tb_top.u_wrap.u_dut.u_core.SCLK != cpol) begin
         result = count;
         return;
       end
@@ -114,9 +123,14 @@ class delay_transfer_test;
 
   // CONVERTED: function -> task (contains timing controls)
   static task wait_for_busy_set(output int result, input int timeout = TIMEOUT_CYCLES);
+    bit [31:0] status;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) begin
+
+      // apb_read is a TASK (addr, data), not a function
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+
+      if ((status & 32'h1) == 32'h1) begin
         result = 1;
         return;
       end
@@ -127,9 +141,14 @@ class delay_transfer_test;
 
   // CONVERTED: function -> task (contains timing controls)
   static task wait_for_busy_clear(output int result, input int timeout = TIMEOUT_CYCLES);
+    bit [31:0] status;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) begin
+
+      // apb_read is a TASK (addr, data), not a function
+      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+
+      if ((status & 32'h1) == 32'h0) begin
         result = 1;
         return;
       end
@@ -186,8 +205,8 @@ class delay_transfer_test;
 
     // --- Phase 2: Idle Cycle Verification ---
     foreach (delay_values[i]) begin
-      delay_value        = delay_values[i];
-      div_val            = get_div_value();
+      delay_value = delay_values[i];
+      get_div_value(div_val);
       expected_idle_pclk = delay_value * (div_val + 1);
 
       tb_top.u_apb_bfm.apb_write(APB_DELAY, delay_value);
@@ -213,7 +232,6 @@ class delay_transfer_test;
                        .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
 
         // Confirm BUSY is still 1 after gap measurement
-
         tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
         if (status[0] == 1'b1) begin
           coverage.sample_busy(1'b1, 2'b00);  // Re-sample BUSY=1 state
@@ -262,7 +280,7 @@ class delay_transfer_test;
 
     // Second gap: new DELAY should be active
     measure_idle_pclk(second_gap, IDLE_MEASURE_TIMEOUT);
-    div_val_p3      = get_div_value();
+    get_div_value(div_val_p3);
     expected_second = new_delay * (div_val_p3 + 1);
     check_idle_gap(.observed(second_gap), .expected(expected_second), .delay_value(new_delay),
                    .gap_index(1), .ref_model(ref_model));
