@@ -3,23 +3,23 @@
 `define DELAY_TRANSFER_TEST_SV 
 
 `ifndef TIMEOUT_CYCLES
-  localparam int TIMEOUT_CYCLES = 2_500_000;
+localparam int TIMEOUT_CYCLES = 2_500_000;
 `endif
 
 `ifndef IDLE_MEASURE_TIMEOUT
-  localparam int IDLE_MEASURE_TIMEOUT = 200_000;
+localparam int IDLE_MEASURE_TIMEOUT = 200_000;
 `endif
 
 `ifndef CTRL_DEFAULT
-  localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1
+localparam CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1
 `endif
 
 `ifndef SS_EN0
-  localparam SS_EN0 = 32'h0000_0001;
+localparam SS_EN0 = 32'h0000_0001;
 `endif
 
 `ifndef SS_DISABLE
-  localparam SS_DISABLE = 32'h0000_0000;
+localparam SS_DISABLE = 32'h0000_0000;
 `endif
 
 class delay_transfer_test;
@@ -30,7 +30,8 @@ class delay_transfer_test;
 
   // Measures the number of PCLK cycles SCLK remains at idle level between transfers.
   // Returns -1 on timeout or if BUSY deasserts unexpectedly (R21 violation).
-  static function int measure_idle_pclk(int timeout = IDLE_MEASURE_TIMEOUT);
+  // CONVERTED: function -> task (contains timing controls)
+  static task measure_idle_pclk(output int result, input int timeout = IDLE_MEASURE_TIMEOUT);
     logic        cpol = tb_top.bfm_mode[1];  // CPOL: MODE[1] (R4)
     int unsigned div_val = get_div_value();
     int unsigned half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
@@ -45,7 +46,10 @@ class delay_transfer_test;
       end
       timeout--;
     end
-    if (timeout == 0) return -1;
+    if (timeout == 0) begin
+      result = -1;
+      return;
+    end
 
     // Count idle PCLKs until SCLK leaves idle level.
     // Start at half_cycle_pclk to account for the confirmation window already elapsed.
@@ -54,16 +58,20 @@ class delay_transfer_test;
 
       if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1'b1) == 0) begin
         $display("[CHECKER_ERROR] delay_transfer: BUSY deasserted during DELAY gap");
-        return -1;
+        result = -1;
+        return;
       end
 
-      if (tb_top.u_wrap.u_dut.u_core.sclk != cpol) return count;
+      if (tb_top.u_wrap.u_dut.u_core.sclk != cpol) begin
+        result = count;
+        return;
+      end
       count++;
       timeout--;
     end
 
-    return -1;
-  endfunction
+    result = -1;
+  endtask
 
   // Validates observed idle PCLK count against expected.
   // For DELAY=0, any idle > 2 PCLKs is flagged.
@@ -103,23 +111,31 @@ class delay_transfer_test;
     end
   endtask
 
-  static function int wait_for_busy_set(int timeout = TIMEOUT_CYCLES);
+  // CONVERTED: function -> task (contains timing controls)
+  static task wait_for_busy_set(output int result, input int timeout = TIMEOUT_CYCLES);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) return 1;
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) begin
+        result = 1;
+        return;
+      end
     end
     $display("[CHECKER_ERROR] delay_transfer: timeout waiting for BUSY=1");
-    return 0;
-  endfunction
+    result = 0;
+  endtask
 
-  static function int wait_for_busy_clear(int timeout = TIMEOUT_CYCLES);
+  // CONVERTED: function -> task (contains timing controls)
+  static task wait_for_busy_clear(output int result, input int timeout = TIMEOUT_CYCLES);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) return 1;
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) begin
+        result = 1;
+        return;
+      end
     end
     $display("[CHECKER_ERROR] delay_transfer: timeout waiting for BUSY=0");
-    return 0;
-  endfunction
+    result = 0;
+  endtask
 
   static task cleanup(ref spi_coverage_col coverage);
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_DISABLE);
@@ -142,6 +158,8 @@ class delay_transfer_test;
     int          second_gap;
     int unsigned div_val_p3;
     int          expected_second;
+    // Local variables for task return values
+    int busy_set_result, busy_clr_result, idle_result;
 
     $display("[INFO] delay_transfer_test: starting");
 
@@ -178,18 +196,21 @@ class delay_transfer_test;
         tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
       end
 
-      if (!wait_for_busy_set()) begin
+      wait_for_busy_set(busy_set_result);
+      if (!busy_set_result) begin
         ref_model.error_count++;
         continue;
       end
       coverage.sample_busy(1'b1, 2'b00);
 
       for (gap = 0; gap < 2; gap++) begin  // 2 gaps for 3 words
-        check_idle_gap(.observed(measure_idle_pclk()), .expected(expected_idle_pclk),
+        measure_idle_pclk(idle_result);
+        check_idle_gap(.observed(idle_result), .expected(expected_idle_pclk),
                        .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
       end
 
-      if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
+      wait_for_busy_clear(busy_clr_result, TIMEOUT_CYCLES);
+      if (!busy_clr_result) ref_model.error_count++;
       coverage.sample_busy(1'b0, 2'b00);
 
       drain_rx(3, ref_model);
@@ -206,7 +227,8 @@ class delay_transfer_test;
     ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8));
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[0]);
 
-    if (!wait_for_busy_set(TIMEOUT_CYCLES)) ref_model.error_count++;
+    wait_for_busy_set(busy_set_result, TIMEOUT_CYCLES);
+    if (!busy_set_result) ref_model.error_count++;
     coverage.sample_busy(1'b1, 2'b00);
 
     // Update DELAY mid-transfer; should apply starting from the second inter-word gap
@@ -220,17 +242,19 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
 
     // First gap: DELAY was 0 when transfer started, expect no idle
-    check_idle_gap(.observed(measure_idle_pclk()), .expected(0), .delay_value(0), .gap_index(0),
+    measure_idle_pclk(idle_result);
+    check_idle_gap(.observed(idle_result), .expected(0), .delay_value(0), .gap_index(0),
                    .ref_model(ref_model));
 
     // Second gap: new DELAY should be active
-    second_gap      = measure_idle_pclk(IDLE_MEASURE_TIMEOUT);
+    measure_idle_pclk(second_gap, IDLE_MEASURE_TIMEOUT);
     div_val_p3      = get_div_value();
     expected_second = new_delay * (div_val_p3 + 1);
     check_idle_gap(.observed(second_gap), .expected(expected_second), .delay_value(new_delay),
                    .gap_index(1), .ref_model(ref_model));
 
-    if (!wait_for_busy_clear()) ref_model.error_count++;
+    wait_for_busy_clear(busy_clr_result);
+    if (!busy_clr_result) ref_model.error_count++;
     coverage.sample_busy(1'b0, 2'b00);
 
     drain_rx(3, ref_model);
