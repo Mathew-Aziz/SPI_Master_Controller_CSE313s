@@ -37,7 +37,7 @@ class mode_coverage_test;
     // Reset & Clock Setup
     ref_model.apply_reset(.min_cycles(2));
 
-    apb_wr(APB_CLK_DIV, 32'h0000_0004);  // DIV=4 for robust timing
+    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);  // DIV=4 for robust timing
     coverage.sample_clk_div(16'h0004);
 
     // Default BFM init (will be overwritten per iteration)
@@ -91,14 +91,14 @@ class mode_coverage_test;
           ctrl_val[7:6]        = width_idx;
           ctrl_val[5]          = 1'b0;
 
-          apb_wr(APB_CTRL, ctrl_val);
+          apb_wr(coverage, APB_CTRL, ctrl_val);
 
           // Cover config (R4/R5/R6/R25)
           coverage.sample_config(.mode(mode[1:0]), .lsb_first(lsb_first), .width(width_idx),
                                  .loopback(1'b0));
 
           // Assert SS
-          apb_wr(APB_SS_CTRL, 32'h0000_0001);
+          apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
           coverage.sample_ss(4'b0001, 4'b0000);
 
           coverage.sample_busy(1'b1, width_idx);
@@ -108,7 +108,7 @@ class mode_coverage_test;
                                  .miso_word(expected_rx));
 
           // Drive stimulus
-          apb_wr(APB_TX_DATA, tx_word);
+          apb_wr(coverage, APB_TX_DATA, tx_word);
 
           // Wait for transfer completion (bounded timeout)
           case (width_idx)
@@ -119,7 +119,7 @@ class mode_coverage_test;
 
           wait_count = 0;
           repeat (timeout) begin
-            apb_rd(APB_STATUS, rd);
+            apb_rd(coverage, APB_STATUS, rd);
             if (!rd[0]) break;
             wait_count++;
           end
@@ -131,19 +131,19 @@ class mode_coverage_test;
             errors++;
             ref_model.error_count++;
             // ensure SS released even on timeout
-            apb_wr(APB_SS_CTRL, 32'h0000_0000);
+            apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
             coverage.sample_ss(4'b0000, 4'b0000);
             coverage.sample_busy(1'b0, width_idx);
             continue;
           end
 
           // Verify RX
-          apb_rd(APB_RX_DATA, rx_word);
+          apb_rd(coverage, APB_RX_DATA, rx_word);
           ref_model.check_rx_word(rx_word);
 
           // BUSY ended + SS cleanup
           coverage.sample_busy(1'b0, width_idx);
-          apb_wr(APB_SS_CTRL, 32'h0000_0000);
+          apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
           coverage.sample_ss(4'b0000, 4'b0000);
         end
       end

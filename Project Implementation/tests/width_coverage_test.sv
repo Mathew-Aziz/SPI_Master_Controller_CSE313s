@@ -41,10 +41,10 @@ class width_coverage_test;
 
     $display("[INFO] width_coverage_test: starting");
 
-    apb_wr(APB_CLK_DIV, 32'h0000_0002);
+    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0002);
     coverage.sample_clk_div(16'h0002);
 
-    apb_wr(APB_DELAY, 32'h0000_0000);
+    apb_wr(coverage, APB_DELAY, 32'h0000_0000);
     coverage.sample_delay(8'h00, 1'b0);
 
     // Step 1: Width sweep + boundary patterns
@@ -112,7 +112,7 @@ class width_coverage_test;
           ctrl_word[5]         = 1'b0;  // LOOPBACK
           ctrl_word[7:6]       = width_enc;  // WIDTH
 
-          apb_wr(APB_CTRL, ctrl_word);
+          apb_wr(coverage, APB_CTRL, ctrl_word);
 
           // Cover config (R4/R5/R6/R25)
           coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc),
@@ -123,12 +123,12 @@ class width_coverage_test;
                                  .miso_word(miso_word));
 
           // Assert SS + push TX
-          apb_wr(APB_SS_CTRL, 32'h1);
+          apb_wr(coverage, APB_SS_CTRL, 32'h1);
           coverage.sample_ss(4'b0001, 4'b0000);
 
           coverage.sample_busy(1'b1, width_enc);
 
-          apb_wr(APB_TX_DATA, tx_word);
+          apb_wr(coverage, APB_TX_DATA, tx_word);
 
           // TP-SPI-05: Mid-transfer update (once per width)
           if (!did_mid_update) begin
@@ -142,14 +142,15 @@ class width_coverage_test;
                                                         32'hCAFE_BABE;
 
             // Write new CTRL during BUSY (should apply next transfer)
-            apb_wr(APB_CTRL, {24'h0, next_width_enc, 1'b0, next_lsb_first, 2'b00, 1'b1, 1'b1});
+            apb_wr(coverage, APB_CTRL, {
+                   24'h0, next_width_enc, 1'b0, next_lsb_first, 2'b00, 1'b1, 1'b1});
             did_mid_update = 1'b1;
           end
 
           // BUSY poll with timeout
           timed_out = 1'b1;
           repeat (500) begin
-            apb_rd(APB_STATUS, rd);
+            apb_rd(coverage, APB_STATUS, rd);
             if (rd[0] == 1'b0) begin
               timed_out = 1'b0;
               break;
@@ -161,14 +162,14 @@ class width_coverage_test;
                                     ));
 
           // Read RX and check
-          apb_rd(APB_RX_DATA, rd);
+          apb_rd(coverage, APB_RX_DATA, rd);
           ref_model.check_rx_word(rd);
 
           // BUSY ended
           coverage.sample_busy(1'b0, width_enc);
 
           // Deassert SS
-          apb_wr(APB_SS_CTRL, 32'h0);
+          apb_wr(coverage, APB_SS_CTRL, 32'h0);
           coverage.sample_ss(4'b0000, 4'b0000);
 
           // ---------- Extra Test Case A: verify NEXT transfer uses updated CTRL ----------
@@ -187,16 +188,16 @@ class width_coverage_test;
                                    .loopback(1'b0), .miso_word(~tx_word_next));
 
             // SS + TX for next transfer
-            apb_wr(APB_SS_CTRL, 32'h1);
+            apb_wr(coverage, APB_SS_CTRL, 32'h1);
             coverage.sample_ss(4'b0001, 4'b0000);
 
             coverage.sample_busy(1'b1, next_width_enc);
 
-            apb_wr(APB_TX_DATA, tx_word_next);
+            apb_wr(coverage, APB_TX_DATA, tx_word_next);
 
             timed_out = 1'b1;
             repeat (500) begin
-              apb_rd(APB_STATUS, rd);
+              apb_rd(coverage, APB_STATUS, rd);
               if (rd[0] == 1'b0) begin
                 timed_out = 1'b0;
                 break;
@@ -207,12 +208,12 @@ class width_coverage_test;
                   "BUSY_TIMEOUT_NEXT", $sformatf(
                   "BUSY did not clear for next transfer width=%0d", next_width_bits));
 
-            apb_rd(APB_RX_DATA, rd);
+            apb_rd(coverage, APB_RX_DATA, rd);
             ref_model.check_rx_word(rd);
 
             coverage.sample_busy(1'b0, next_width_enc);
 
-            apb_wr(APB_SS_CTRL, 32'h0);
+            apb_wr(coverage, APB_SS_CTRL, 32'h0);
             coverage.sample_ss(4'b0000, 4'b0000);
           end
 
@@ -220,7 +221,7 @@ class width_coverage_test;
           if ((p == 0) && (o == 0)) begin
             // Enable loopback for one transfer to ensure width honored in LOOPBACK
             ctrl_word[5] = 1'b1;  // LOOPBACK=1
-            apb_wr(APB_CTRL, ctrl_word);
+            apb_wr(coverage, APB_CTRL, ctrl_word);
 
             // Loopback config coverage (R19)
             coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc),
@@ -230,16 +231,16 @@ class width_coverage_test;
             ref_model.predict_word(.tx_word(tx_word), .width_bits(width_bits), .loopback(1'b1),
                                    .miso_word(miso_word));
 
-            apb_wr(APB_SS_CTRL, 32'h1);
+            apb_wr(coverage, APB_SS_CTRL, 32'h1);
             coverage.sample_ss(4'b0001, 4'b0000);
 
             coverage.sample_busy(1'b1, width_enc);
 
-            apb_wr(APB_TX_DATA, tx_word);
+            apb_wr(coverage, APB_TX_DATA, tx_word);
 
             timed_out = 1'b1;
             repeat (500) begin
-              apb_rd(APB_STATUS, rd);
+              apb_rd(coverage, APB_STATUS, rd);
               if (rd[0] == 1'b0) begin
                 timed_out = 1'b0;
                 break;
@@ -249,17 +250,17 @@ class width_coverage_test;
               ref_model.checker_error("BUSY_TIMEOUT_LB", $sformatf(
                                       "BUSY did not clear in loopback width=%0d", width_bits));
 
-            apb_rd(APB_RX_DATA, rd);
+            apb_rd(coverage, APB_RX_DATA, rd);
             ref_model.check_rx_word(rd);
 
             coverage.sample_busy(1'b0, width_enc);
 
-            apb_wr(APB_SS_CTRL, 32'h0);
+            apb_wr(coverage, APB_SS_CTRL, 32'h0);
             coverage.sample_ss(4'b0000, 4'b0000);
 
             // restore loopback off for subsequent cases
             ctrl_word[5] = 1'b0;
-            apb_wr(APB_CTRL, ctrl_word);
+            apb_wr(coverage, APB_CTRL, ctrl_word);
 
             // Restore non-loopback config coverage
             coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc),

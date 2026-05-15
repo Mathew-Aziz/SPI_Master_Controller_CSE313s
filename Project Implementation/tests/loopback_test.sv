@@ -37,10 +37,10 @@ class loopback_test;
     $display("[INFO] loopback_test: starting");
 
     // Program div + delay (and sample their dedicated covergroups)
-    apb_wr(APB_CLK_DIV, 32'h0000_0002);
+    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0002);
     coverage.sample_clk_div(16'h0002);
 
-    apb_wr(APB_DELAY, 32'h0);
+    apb_wr(coverage, APB_DELAY, 32'h0);
     coverage.sample_delay(8'h00, 1'b0);
 
     // Loop over widths: 8, 16, 32
@@ -87,14 +87,14 @@ class loopback_test;
         ctrl_word[5]         = 1'b1;  // LOOPBACK
         ctrl_word[7:6]       = width_enc;  // WIDTH
 
-        apb_wr(APB_CTRL, ctrl_word);
+        apb_wr(coverage, APB_CTRL, ctrl_word);
 
         // NEW: cover SPI config + loopback (R4/R5/R6/R25 + R19)
         coverage.sample_config(.mode(2'b00), .lsb_first(lsb_first), .width(width_enc),
                                .loopback(1'b1));
 
         // Assert SS0 low (and sample SS coverage)
-        apb_wr(APB_SS_CTRL, 32'h1);
+        apb_wr(coverage, APB_SS_CTRL, 32'h1);
         coverage.sample_ss(4'b0001, 4'b0000);
 
         // Optional busy sampling: we know we're starting a transfer now
@@ -105,12 +105,12 @@ class loopback_test;
                                .miso_word(miso_word));
 
         // Push TX
-        apb_wr(APB_TX_DATA, tx_word);
+        apb_wr(coverage, APB_TX_DATA, tx_word);
 
         // Poll BUSY with timeout
         timed_out = 1'b1;
         repeat (500) begin
-          apb_rd(APB_STATUS, rd);
+          apb_rd(coverage, APB_STATUS, rd);
           if (rd[0] == 1'b0) begin
             timed_out = 1'b0;
             break;
@@ -123,7 +123,7 @@ class loopback_test;
                                   ));
 
         // Read RX and check
-        apb_rd(APB_RX_DATA, rd);
+        apb_rd(coverage, APB_RX_DATA, rd);
         $display(rd);
         ref_model.check_rx_word(rd);
 
@@ -131,7 +131,7 @@ class loopback_test;
         coverage.sample_busy(1'b0, width_enc);
 
         // Deassert SS (and sample SS coverage)
-        apb_wr(APB_SS_CTRL, 32'h0);
+        apb_wr(coverage, APB_SS_CTRL, 32'h0);
         coverage.sample_ss(4'b0000, 4'b0000);
       end
     end

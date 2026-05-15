@@ -20,9 +20,9 @@ class interrupt_test;
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
+    bit [31:0] rd = 0;
     $display("[INFO] interrupt_test: starting");
 
-    bit [31:0] rd = 0;
 
     tb_top.bfm_mode      = 2'b00;  // CPOL=0 CPHA=0
     tb_top.bfm_pattern   = 8'hA5;
