@@ -139,6 +139,11 @@ class clk_div_corner_test;
           next_period);
       ref_model.error_count++;
     end
+
+    bit [31:0] rx_temp2; 
+    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
+    ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
+    
     cleanup();
   endtask
 
@@ -146,8 +151,7 @@ class clk_div_corner_test;
                                  input int timeout = CLK_DIV_TIMEOUT_CYCLES,
                                  ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     int cleared;
-    ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
+    ref_model.predict_transfer(.tx_word(tx_data), .width(8), .miso_word(32'h00), .loopback(1'b0));
     apb_wr(APB_TX_DATA, tx_data, coverage);
     @(posedge tb_top.PCLK);
     wait_for_busy_clear(timeout, cleared);
@@ -218,7 +222,6 @@ class clk_div_corner_test;
       end
 
       // Drain RX from reference model and sample busy/ss
-      ref_model.pop_rx();
       coverage.sample_busy(1'b0, 2'b00);
 
       cleanup();
