@@ -45,7 +45,7 @@ class clk_div_corner_test;
     period = 2 * count;
   endtask
 
-  static task wait_for_busy_clear(input int timeout = 100_000, output cleared);
+  static task wait_for_busy_clear(input int timeout = 100_000, output int cleared);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
       if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) cleared = 1;  // busy cleared
