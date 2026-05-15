@@ -41,6 +41,12 @@ class delay_transfer_test;
     return 0;
   endfunction
 
+  static task cleanup();
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_DISABLE);
+    @(posedge tb_top.PCLK);
+  endtask
+
+
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // TODO:
     // DELAY= 0,1,>=128. Queue 2+ words, verify inserted idle half-cycles and BUSY stays 1 (R21).
