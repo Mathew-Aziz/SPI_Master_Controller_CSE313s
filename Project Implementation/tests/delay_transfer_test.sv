@@ -205,12 +205,13 @@ class delay_transfer_test;
       coverage.sample_busy(1'b1, 2'b00);
 
       for (gap = 0; gap < 2; gap++) begin  // 2 gaps for 3 words
+        bit [31:0] status;
         measure_idle_pclk(idle_result);
         check_idle_gap(.observed(idle_result), .expected(expected_idle_pclk),
                        .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
 
         // Confirm BUSY is still 1 after gap measurement
-        bit [31:0] status;
+
         tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
         if (status[0] == 1'b1) begin
           coverage.sample_busy(1'b1, 2'b00);  // Re-sample BUSY=1 state
@@ -245,11 +246,11 @@ class delay_transfer_test;
     coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
     ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));  
+                               .loopback(1'b0));
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
 
     ref_model.predict_transfer(.tx_word(tx_words[2]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0)); 
+                               .loopback(1'b0));
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
 
     // First gap: DELAY was 0 when transfer started, expect no idle

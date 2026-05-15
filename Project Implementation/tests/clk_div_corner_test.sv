@@ -100,6 +100,8 @@ class clk_div_corner_test;
     int next_period;
     int cleared;
     int set;
+    bit [31:0] rx_temp;
+    bit [31:0] rx_temp2;
 
     apb_wr(APB_CLK_DIV, old_div_value, coverage);
     coverage.sample_clk_div(old_div_value[15:0]);
@@ -121,7 +123,7 @@ class clk_div_corner_test;
       ref_model.error_count++;
     end
     // Cleanup
-    bit [31:0] rx_temp;
+
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // Verify + pop in one call
 
@@ -140,7 +142,7 @@ class clk_div_corner_test;
       ref_model.error_count++;
     end
 
-    bit [31:0] rx_temp2; 
+
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
     ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
 
