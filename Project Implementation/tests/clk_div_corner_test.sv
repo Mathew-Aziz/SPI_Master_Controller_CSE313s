@@ -4,31 +4,31 @@
 
 // Magic Numbers
 `ifndef EDGE_DETECTION_PATTERN_DEFINED
-  localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 `endif
 
 `ifndef CLK_DIV_TIMEOUT_CYCLES_DEFINED
-  localparam int CLK_DIV_TIMEOUT_CYCLES = 2_500_000;
+localparam int CLK_DIV_TIMEOUT_CYCLES = 2_500_000;
 `endif
 
 `ifndef CLK_DIV_MEASURE_TIMEOUT_DEFINED
-  localparam int CLK_DIV_MEASURE_TIMEOUT = 200_000;
+localparam int CLK_DIV_MEASURE_TIMEOUT = 200_000;
 `endif
 
 `ifndef CLK_DIV_MID_MEASURE_TIMEOUT_DEFINED
-  localparam int CLK_DIV_MID_MEASURE_TIMEOUT = 5_000;
+localparam int CLK_DIV_MID_MEASURE_TIMEOUT = 5_000;
 `endif
 
 `ifndef CLK_DIV_CTRL_DEFAULT_DEFINED
-  localparam CLK_DIV_CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
+localparam CLK_DIV_CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
 `endif
 
 `ifndef CLK_DIV_SS_EN0_DEFINED
-  localparam CLK_DIV_SS_EN0 = 32'h0000_0001;
+localparam CLK_DIV_SS_EN0 = 32'h0000_0001;
 `endif
 
 `ifndef CLK_DIV_SS_DISABLE_DEFINED
-  localparam CLK_DIV_SS_DISABLE = 32'h0000_0000;
+localparam CLK_DIV_SS_DISABLE = 32'h0000_0000;
 `endif
 
 class clk_div_corner_test;
@@ -66,23 +66,29 @@ class clk_div_corner_test;
   endtask
 
   static task wait_for_busy_clear(input int timeout = 100_000, output int cleared);
+    cleared = 0;  // timeout
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) cleared = 1;  // busy cleared
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) begin
+        cleared = 1;
+        return;
+      end  // busy cleared
     end
 
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=0");
-    cleared = 0;  // timeout
   endtask
 
   static task wait_for_busy_set(int timeout = 100_000, output int set);
+    set = 0;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) set = 1;
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 1) begin
+        set = 1;
+        return;
+      end
     end
 
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=1");
-    set = 0;
   endtask
 
   static task test_mid_transfer_div_update(ref spi_ref_model ref_model,
