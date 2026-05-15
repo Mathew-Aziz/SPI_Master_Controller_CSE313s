@@ -203,9 +203,9 @@ class spi_ref_model;
 
   // ------------------------- Prediction wrapper (for test compatibility) --------------------------
   task predict_transfer(input bit [31:0] tx_word, input int width = 8,
-                        input bit [31:0] miso_word = 32'h0);
-    // Default: loopback mode for delay_transfer_test (MISO driven by BFM as dummy echo)
-    predict_word(.tx_word(tx_word), .width_bits(width), .loopback(1'b0), .miso_word(miso_word));
+                        input bit [31:0] miso_word = 32'h0, input bit loopback = 1'b0);
+    predict_word(.tx_word(tx_word), .width_bits(width), .loopback(loopback), .miso_word(miso_word));
+    rx_queue.push_back(pred_rx_word);  // Track for verification
   endtask
 
   // ------------------------- RX FIFO state management --------------------------
