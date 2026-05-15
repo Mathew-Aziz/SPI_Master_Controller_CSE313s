@@ -112,7 +112,7 @@ class clk_div_corner_test;
     coverage.sample_clk_div(new_div_value[15:0]);
 
     // Check Current Transfer
-    measure_sclk_period(MID_MEASURE_TIMEOUT, mid_period);
+    measure_sclk_period(CLK_DIV_MID_MEASURE_TIMEOUT, mid_period, coverage);
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
@@ -127,7 +127,7 @@ class clk_div_corner_test;
     wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
     if (!cleared) ref_model.error_count++;
 
-    measure_sclk_period(MID_MEASURE_TIMEOUT, next_period);
+    measure_sclk_period(CLK_DIV_MID_MEASURE_TIMEOUT, next_period, coverage);
     if (next_period != 2 * (new_div_value + 1)) begin
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
@@ -199,7 +199,7 @@ class clk_div_corner_test;
       send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, coverage);
 
       // Measure SCLK period
-      measure_sclk_period(CLK_DIV_MEASURE_TIMEOUT, measured_period);
+      measure_sclk_period(CLK_DIV_MEASURE_TIMEOUT, measured_period, coverage);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);

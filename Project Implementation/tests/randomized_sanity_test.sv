@@ -62,14 +62,14 @@ class randomized_sanity_test;
     ctrl_word[5]         = t.loopback;
     ctrl_word[7:6]       = t.width;
 
-    apb_wr(8'h00, ctrl_word);  // CTRL
-    apb_wr(8'h10, {16'h0, t.clk_div});  // CLK_DIV
+    apb_wr(coverage, 8'h00, ctrl_word);  // CTRL
+    apb_wr(coverage, 8'h10, {16'h0, t.clk_div});  // CLK_DIV
     coverage.sample_clk_div(t.clk_div[15:0]);
 
-    apb_wr(8'h20, {24'h0, t.delay_cfg});  // DELAY
+    apb_wr(coverage, 8'h20, {24'h0, t.delay_cfg});  // DELAY
     coverage.sample_delay(t.delay_cfg[7:0], 1'b0);
 
-    apb_wr(8'h18, 32'h0000_000F);  // INT_EN
+    apb_wr(coverage, 8'h18, 32'h0000_000F);  // INT_EN
 
     ref_model.predict_single_byte(.tx_byte(t.tx_data[7:0]), .miso_pattern(tb_top.bfm_pattern),
                                   .loopback(t.loopback));
@@ -77,20 +77,20 @@ class randomized_sanity_test;
     coverage.sample_config(.mode(t.mode), .lsb_first(t.lsb_first), .width(t.width),
                            .loopback(t.loopback));
 
-    apb_wr(8'h08, t.tx_data);  // TX_DATA
-    apb_wr(8'h14, 32'h0000_0001);  // SS_CTRL assert ss[0]
+    apb_wr(coverage, 8'h08, t.tx_data);  // TX_DATA
+    apb_wr(coverage, 8'h14, 32'h0000_0001);  // SS_CTRL assert ss[0]
     coverage.sample_ss(4'b0001, 4'b0000);
 
     repeat (500) begin
-      apb_rd(8'h04, rd);  // STATUS
+      apb_rd(coverage, 8'h04, rd);  // STATUS
       if (rd[0] == 1'b0) break;
     end
     coverage.sample_busy(1'b0, t.width);
 
-    apb_rd(8'h0C, rd);  // RX_DATA
+    apb_rd(coverage, 8'h0C, rd);  // RX_DATA
     ref_model.check_rx(rd);
 
-    apb_wr(8'h14, 32'h0000_0000);
+    apb_wr(coverage, 8'h14, 32'h0000_0000);
     coverage.sample_ss(4'b0000, 4'b0000);
 
     $display("[INFO] randomized_sanity_test: finished, errors=%0d", ref_model.error_count);

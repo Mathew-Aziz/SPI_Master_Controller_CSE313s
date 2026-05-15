@@ -35,40 +35,40 @@ class fifo_stress_test;
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 32'h0000_00A5;  // matches bfm_pattern
 
-    apb_wr(APB_CTRL, 32'h0000_0003);  // EN, MSTR
-    apb_wr(APB_CLK_DIV, 32'h0000_0004);  // divide /4
+    apb_wr(coverage, APB_CTRL, 32'h0000_0003);  // EN, MSTR
+    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);  // divide /4
     coverage.sample_clk_div(16'h0004);
 
     coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
 
     // confirm TX_FIFO is empty
-    apb_rd(APB_STATUS, rd);
+    apb_rd(coverage, APB_STATUS, rd);
 
     if (rd[2] != 1'b1) begin  // If not empty, drain it first
-      apb_wr(APB_SS_CTRL, 32'h0000_0001);  // assert ss[0] LOW
+      apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // assert ss[0] LOW
       coverage.sample_ss(4'b0001, 4'b0000);
 
       repeat (500) begin
-        apb_rd(APB_STATUS, rd);
+        apb_rd(coverage, APB_STATUS, rd);
         if (rd[0] == 1'b0) break;
       end
 
       coverage.sample_busy(1'b0, 2'b00);
       ref_model.check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
 
-      apb_wr(APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
+      apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
       coverage.sample_ss(4'b0000, 4'b0000);
     end
 
     // Push 8 bytes with reading TX_FULL flag, confirm STATUS.FULL (R11)
     for (int i = 0; i < 8; i++) begin
       TX_q.push_back(32'(i));
-      apb_wr(APB_TX_DATA, 32'(i));
+      apb_wr(coverage, APB_TX_DATA, 32'(i));
 
       // Track FIFO occupancy for coverage (best-effort)
       coverage.sample_fifo(i + 1, 0);
 
-      apb_rd(APB_STATUS, rd);
+      apb_rd(coverage, APB_STATUS, rd);
       if (i < 7) begin
         ref_model.check_tx_status(rd, .expect_full(1'b0), .expect_empty(1'b0), .expect_busy(1'b0));
       end else begin
@@ -83,9 +83,9 @@ class fifo_stress_test;
 
     // Empty RX FIFO by reading until empty
     repeat (20) begin
-      apb_rd(APB_STATUS, rd);
+      apb_rd(coverage, APB_STATUS, rd);
       if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
-      apb_rd(APB_RX_DATA, rd);
+      apb_rd(coverage, APB_RX_DATA, rd);
     end
     coverage.sample_fifo(8, 0);  // TX still full from earlier
 
@@ -96,19 +96,19 @@ class fifo_stress_test;
 
     tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
 
-    apb_rd(APB_STATUS, rd);
+    apb_rd(coverage, APB_STATUS, rd);
     ref_model.check_rx_status(rd, .expect_full(1'b1), .expect_empty(1'b0));
     coverage.sample_fifo(8, 8);
 
     // Read out RX FIFO and verify order (R10)
     for (int i = 0; i < 8; i++) begin
-      apb_rd(APB_RX_DATA, rd);
+      apb_rd(coverage, APB_RX_DATA, rd);
       ref_model.check_reg("RX_DATA", RX_q[i], rd);
       coverage.sample_fifo(8, 7 - i);
     end
 
     // Check STATUS shows RX_EMPTY after reading all 8
-    apb_rd(APB_STATUS, rd);
+    apb_rd(coverage, APB_STATUS, rd);
     ref_model.check_rx_status(rd, .expect_full(1'b0), .expect_empty(1'b1));
     coverage.sample_fifo(8, 0);
 
