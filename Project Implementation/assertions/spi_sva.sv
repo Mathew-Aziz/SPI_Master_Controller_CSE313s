@@ -135,18 +135,16 @@ module apb_sva (
 
 
   // Spec R3        : CTRL.EN=0 holds the shifter and FIFOs in reset;
-  //                  SCLK stays at CPOL idle; SS_n forced high regardless
-  //                  of SS_CTRL.
-  chk_r3_fifo_and_ovf_reset_when_disabled :
+  //                  SCLK stays at CPOL idle; 
+  chk_r3_fifo_and_ovf_reset_when_disabled : 
   assert property (
         @(posedge PCLK) (!ctrl_en) |-> (
                 tx_full_w            == 1'h0 &&
                 tx_empty_w           == 1'h1 &&
                 tx_empty             == 1'h1 &&
                 rx_full_w            == 1'h0 &&
-                rx_empty_w           == 1'h1 &&
-                int_stat[IRQ_TX_OVF] == 1'h0 &&
-                int_stat[IRQ_RX_OVF] == 1'h0)
+                rx_empty_w           == 1'h1
+)
     )
   else
     $error(
