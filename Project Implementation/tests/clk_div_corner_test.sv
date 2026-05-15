@@ -28,7 +28,8 @@ class clk_div_corner_test;
                         .pready(1'b1));
   endtask
 
-  static function int measure_sclk_period(int timeout = MEASURE_TIMEOUT);
+  static task measure_sclk_period(input int timeout = MEASURE_TIMEOUT, output int period,
+                                  ref spi_coverage_col coverage);
     // Helper: measure full SCLK period in PCLK cycles
     int count = 0;
     wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
@@ -41,8 +42,8 @@ class clk_div_corner_test;
         return -1;
       end
     end
-    return 2 * count;
-  endfunction
+    period = 2 * count;
+  endtask
 
   static function int wait_for_busy_clear(int timeout = 100_000);
     for (int i = 0; i < timeout; i++) begin
@@ -81,7 +82,7 @@ class clk_div_corner_test;
     coverage.sample_clk_div(new_div_value[15:0]);
 
     // Check Current Transfer
-    mid_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
+    measure_sclk_period(MID_MEASURE_TIMEOUT, mid_period);
     if (mid_period != 2 * (old_div_value + 1)) begin
       $display("[SCOREBOARD_ERROR] clk_div_corner: mid-transfer DIV=1 expected=4 measured=%0d",
                mid_period);
@@ -95,7 +96,7 @@ class clk_div_corner_test;
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
     if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
 
-    next_period = measure_sclk_period(MID_MEASURE_TIMEOUT);
+    measure_sclk_period(MID_MEASURE_TIMEOUT, next_period);
     if (next_period != 2 * (new_div_value + 1)) begin
       $display(
           "[SCOREBOARD_ERROR] clk_div_corner: post-mid-transfer DIV=10 expected=22 measured=%0d",
@@ -163,7 +164,7 @@ class clk_div_corner_test;
       send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, TIMEOUT_CYCLES, coverage);
 
       // Measure SCLK period
-      measured_period = measure_sclk_period();
+      measure_sclk_period(MEASURE_TIMEOUT, measured_period);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);
