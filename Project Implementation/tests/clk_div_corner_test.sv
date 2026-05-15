@@ -143,7 +143,7 @@ class clk_div_corner_test;
     bit [31:0] rx_temp2; 
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
     ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
-    
+
     cleanup();
   endtask
 
@@ -209,8 +209,6 @@ class clk_div_corner_test;
       apb_wr(APB_CLK_DIV, div_value, coverage);
       coverage.sample_clk_div(div_value[15:0]);
 
-      ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
-                                 .loopback(1'b0));
       send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, ref_model,
                          coverage);
       // Measure SCLK period
@@ -231,9 +229,6 @@ class clk_div_corner_test;
 
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
     test_mid_transfer_div_update(ref_model, coverage);
-    void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
-    ref_model.pop_rx();
-
     cleanup();
     coverage.sample_ss(4'b0000, 4'b0000);
 
