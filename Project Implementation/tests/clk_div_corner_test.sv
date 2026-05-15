@@ -3,31 +3,31 @@
 `define CLK_DIV_CORNER_TEST_SV 
 
 // Magic Numbers
-`ifndef EDGE_DETECTION_PATTERN_DEFINED
+`ifndef EDGE_DETECTION_PATTERN
 localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 `endif
 
-`ifndef CLK_DIV_TIMEOUT_CYCLES_DEFINED
+`ifndef CLK_DIV_TIMEOUT_CYCLES
 localparam int CLK_DIV_TIMEOUT_CYCLES = 2_500_000;
 `endif
 
-`ifndef CLK_DIV_MEASURE_TIMEOUT_DEFINED
+`ifndef CLK_DIV_MEASURE_TIMEOUT
 localparam int CLK_DIV_MEASURE_TIMEOUT = 200_000;
 `endif
 
-`ifndef CLK_DIV_MID_MEASURE_TIMEOUT_DEFINED
+`ifndef CLK_DIV_MID_MEASURE_TIMEOUT
 localparam int CLK_DIV_MID_MEASURE_TIMEOUT = 5_000;
 `endif
 
-`ifndef CLK_DIV_CTRL_DEFAULT_DEFINED
+`ifndef CLK_DIV_CTRL_DEFAULT
 localparam CLK_DIV_CTRL_DEFAULT = (1 << 0) | (1 << 1);  // EN=1, MSTR=1, other fields default 0
 `endif
 
-`ifndef CLK_DIV_SS_EN0_DEFINED
+`ifndef CLK_DIV_SS_EN0
 localparam CLK_DIV_SS_EN0 = 32'h0000_0001;
 `endif
 
-`ifndef CLK_DIV_SS_DISABLE_DEFINED
+`ifndef CLK_DIV_SS_DISABLE
 localparam CLK_DIV_SS_DISABLE = 32'h0000_0000;
 `endif
 
@@ -52,7 +52,7 @@ class clk_div_corner_test;
                                   ref spi_coverage_col coverage);
     // Helper: measure full SCLK period in PCLK cycles
     int count = 0;
-    period = -1; // Error unless changed
+    period = -1;  // Error unless changed
     wait (tb_top.u_wrap.u_dut.u_core.sclk == 0);
 
     @(posedge tb_top.u_wrap.u_dut.u_core.sclk);
