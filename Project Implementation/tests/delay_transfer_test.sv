@@ -94,11 +94,12 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_CLK_DIV, SS_DISABLE);  // DIV=0 baseline
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);  // SS_EN[0]=1, SS_VAL[0]=0
 
+    int div_value = 1;
+
     // --- Phase 2: Idle Cycle Verification ---
-    int delay_values[$] = '{0, 1, 200};
+    int delay_values  [$] = '{0, 1, 200};
     foreach (delay_values[i]) begin
       int delay_value = delay_values[i];
-      int div_value = 1;
       int expected_idle_pclk = div_value * (div_value + 1);
 
       // Update delay value
@@ -156,6 +157,47 @@ class delay_transfer_test;
       tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
     end
 
+    // --- Phase 3: Mid-Transfer DELAY Update ---
+    int old_delay = 8'd0;
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, old_delay);  // Zero Delay
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[0]);
+    if (!wait_for_busy_set(TIMEOUT_CYCLES)) ref_model.error_count++;
+
+    // Write new DELAY mid-transfer
+    int new_delay = 50;
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
+
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
+    ref_model.predit_transfer(.tx_word(tx_words[0]), .width(8));
+    ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8));
+
+    // Measure first gap (old delay expected)
+    int first_gap = measure_idle_pclk();
+    if (first_gap > 2) begin
+      $display(
+          "[SCOREBOARD_ERROR] delay_transfer: mid-update first gap used new DELAY (expected~0, observed=%0d)",
+          first_gap);
+      ref_model.error_count++;
+    end
+
+    // Measure second gap (new delay expected)
+    int second_gap = measure_idle_pclk(IDLE_MEASURE_TIMEOUT);
+    int expected_second = new_delay * (div_value + 1);
+    if (second_gap != -1) begin
+      int difference = (second_gap > expected_second) ? 
+                          second_gap - expected_second : 
+                          expected_second - second_gap;
+      if (difference > 1) begin
+        $display(
+            "[SCOREBOARD_ERROR] delay_transfer: mid-update second gap mismatch (DELAY=%0d, expected=%0d, observed=%0d)",
+            new_delay, expected_second, second_gap);
+        ref_model.error_count++;
+      end
+    end
+
+    if (!wait_for_busy_clear()) ref_model.error_count++;
+    drain_rx(2, ref_model);
+    cleanup();
 
     $display("[INFO] delay_transfer_test: finished, errors=%0d", ref_model.error_count);
   endtask
