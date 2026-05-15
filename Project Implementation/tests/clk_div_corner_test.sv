@@ -45,15 +45,15 @@ class clk_div_corner_test;
     period = 2 * count;
   endtask
 
-  static function int wait_for_busy_clear(int timeout = 100_000);
+  static task wait_for_busy_clear(input int timeout = 100_000, output cleared);
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
-      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) return 1;  // busy cleared
+      if ((tb_top.u_apb_bfm.apb_read(APB_STATUS) & 1) == 0) cleared = 1;  // busy cleared
     end
 
     $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for BUSY=0");
-    return 0;  // timeout
-  endfunction
+    cleared = 0;  // timeout
+  endtask
 
   static function int wait_for_busy_set(int timeout = 100_000);
     for (int i = 0; i < timeout; i++) begin
@@ -71,6 +71,7 @@ class clk_div_corner_test;
     int new_div_value = 10;
     int mid_period;
     int next_period;
+    int cleared;
 
     apb_wr(APB_CLK_DIV, old_div_value, coverage);
     coverage.sample_clk_div(old_div_value[15:0]);
@@ -94,7 +95,8 @@ class clk_div_corner_test;
 
     // Check Next Transfer
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
-    if (!wait_for_busy_clear(TIMEOUT_CYCLES)) ref_model.error_count++;
+    wait_for_busy_clear(TIMEOUT_CYCLES, cleared);
+    if (!cleared) ref_model.error_count++;
 
     measure_sclk_period(MID_MEASURE_TIMEOUT, next_period);
     if (next_period != 2 * (new_div_value + 1)) begin
@@ -108,9 +110,12 @@ class clk_div_corner_test;
 
   static task send_byte_and_wait(input byte tx_data, output byte rx_data,
                                  input int timeout = TIMEOUT_CYCLES, ref spi_coverage_col coverage);
+    int cleared;
+    
     apb_wr(APB_TX_DATA, tx_data, coverage);
     @(posedge tb_top.PCLK);
-    if (!wait_for_busy_clear(timeout)) begin
+    wait_for_busy_clear(timeout, cleared);
+    if (!cleared) begin
       rx_data = 0;
       return;
     end
