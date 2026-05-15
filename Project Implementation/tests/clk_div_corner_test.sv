@@ -104,6 +104,8 @@ class clk_div_corner_test;
     apb_wr(APB_CLK_DIV, old_div_value, coverage);
     coverage.sample_clk_div(old_div_value[15:0]);
 
+    ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
+                               .loopback(1'b0));
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
     wait_for_busy_set(CLK_DIV_TIMEOUT_CYCLES, set);
     if (!set) ref_model.error_count++;
@@ -119,10 +121,13 @@ class clk_div_corner_test;
       ref_model.error_count++;
     end
     // Cleanup
-    void'(tb_top.u_apb_bfm.apb_read(APB_RX_DATA));
-    ref_model.pop_rx();
+    bit [31:0] rx_temp;
+    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);
+    ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // Verify + pop in one call
 
     // Check Next Transfer
+    ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
+                               .loopback(1'b0));
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
     wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
     if (!cleared) ref_model.error_count++;
@@ -139,9 +144,10 @@ class clk_div_corner_test;
 
   static task send_byte_and_wait(input byte tx_data, output byte rx_data,
                                  input int timeout = CLK_DIV_TIMEOUT_CYCLES,
-                                 ref spi_coverage_col coverage);
+                                 ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     int cleared;
-
+    ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
+                               .loopback(1'b0));
     apb_wr(APB_TX_DATA, tx_data, coverage);
     @(posedge tb_top.PCLK);
     wait_for_busy_clear(timeout, cleared);
@@ -149,7 +155,11 @@ class clk_div_corner_test;
       rx_data = 0;
       return;
     end
+
     apb_rd(APB_RX_DATA, rx_data, coverage);
+
+    // Verify RX against prediction (required for [SCOREBOARD_ERROR] emission)
+    ref_model.verify_rx_drain(.observed(rx_data), .width(8));
   endtask
 
   static task cleanup();
@@ -195,9 +205,10 @@ class clk_div_corner_test;
       apb_wr(APB_CLK_DIV, div_value, coverage);
       coverage.sample_clk_div(div_value[15:0]);
 
-      ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
-      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, coverage);
-
+      ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
+                                 .loopback(1'b0));
+      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, ref_model,
+                         coverage);
       // Measure SCLK period
       measure_sclk_period(CLK_DIV_MEASURE_TIMEOUT, measured_period, coverage);
       if (expected_period != measured_period) begin
