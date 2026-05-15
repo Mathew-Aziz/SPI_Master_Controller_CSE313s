@@ -43,7 +43,7 @@ SEQ_SRCS   ?= \
   $(STUDENT_TB)/sequences/stim_lib.sv
 
 ASSERT_SRCS?= \
-  $(STUDENT_TB)/assertions/abp_sva.sv
+  $(STUDENT_TB)/assertions/apb_sva.sv
 
 # NOTE: test files (tests/*.sv) are NOT listed here on purpose.
 #
@@ -84,7 +84,8 @@ REGRESSION_TESTS = \
   clk_div_corner_test \
   loopback_test \
   delay_transfer_test \
-  error_injection_test
+  error_injection_test \
+  randomized_sanity_test
 
 REGRESSION_SEEDS ?= 20   # 10 * 20 = 200 runs (well under the 10000 cap)
 
@@ -112,7 +113,7 @@ compile:
 	   $(TB_SRCS)
 
 run: compile
-	vsim -c work.tb_top \
+	vsim -c -coverage work.tb_top \
 	     -do "run -all; coverage save cov_$(TEST)_$(SEED).ucdb; quit -f" \
 	     +TESTNAME=$(TEST) +UVM_TESTNAME=$(TEST) +SEED=$(SEED) \
 	     $(if $(filter 1,$(WAVES)), -wlf waves_$(TEST)_$(SEED).wlf,)
