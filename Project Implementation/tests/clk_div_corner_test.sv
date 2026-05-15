@@ -48,7 +48,7 @@ class clk_div_corner_test;
                         .pready(1'b1));
   endtask
 
-  static task measure_sclk_period(input int timeout = MEASURE_TIMEOUT, output int period,
+  static task measure_sclk_period(input int timeout = CLK_DIV_MEASURE_TIMEOUT, output int period,
                                   ref spi_coverage_col coverage);
     // Helper: measure full SCLK period in PCLK cycles
     int count = 0;
@@ -105,7 +105,7 @@ class clk_div_corner_test;
     coverage.sample_clk_div(old_div_value[15:0]);
 
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
-    wait_for_busy_set(TIMEOUT_CYCLES, set);
+    wait_for_busy_set(CLK_DIV_TIMEOUT_CYCLES, set);
     if (!set) ref_model.error_count++;
 
     apb_wr(APB_CLK_DIV, new_div_value, coverage);  // Write new DIV while transfer is active
@@ -124,7 +124,7 @@ class clk_div_corner_test;
 
     // Check Next Transfer
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
-    wait_for_busy_clear(TIMEOUT_CYCLES, cleared);
+    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
     if (!cleared) ref_model.error_count++;
 
     measure_sclk_period(MID_MEASURE_TIMEOUT, next_period);
@@ -138,7 +138,8 @@ class clk_div_corner_test;
   endtask
 
   static task send_byte_and_wait(input byte tx_data, output byte rx_data,
-                                 input int timeout = TIMEOUT_CYCLES, ref spi_coverage_col coverage);
+                                 input int timeout = CLK_DIV_TIMEOUT_CYCLES,
+                                 ref spi_coverage_col coverage);
     int cleared;
 
     apb_wr(APB_TX_DATA, tx_data, coverage);
@@ -195,10 +196,10 @@ class clk_div_corner_test;
       coverage.sample_clk_div(div_value[15:0]);
 
       ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8));
-      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, TIMEOUT_CYCLES, coverage);
+      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, coverage);
 
       // Measure SCLK period
-      measure_sclk_period(MEASURE_TIMEOUT, measured_period);
+      measure_sclk_period(CLK_DIV_MEASURE_TIMEOUT, measured_period);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
                  expected_period, measured_period);
