@@ -40,7 +40,7 @@ class fifo_stress_test;
 
     for(int width = 0; width < 3; i++) begin
      
-      tb_top.bfm_width     = 2'(width);  // 8-bit
+      tb_top.bfm_width     = 2'(width);
       coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(width), .loopback(1'b0));
 
       // confirm TX_FIFO is empty
