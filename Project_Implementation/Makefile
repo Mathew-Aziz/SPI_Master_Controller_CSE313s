@@ -6,7 +6,7 @@
 # be consumed directly by the grader without modification.
 # =============================================================================
 
-SIMULATOR ?= model
+SIMULATOR ?= questa
 SEED      ?= 0
 TEST      ?= sanity_test
 WAVES     ?= 0
@@ -68,7 +68,7 @@ REGRESSION_SEEDS ?= 1   # 10 * 20 = 200 runs (well under the 10000 cap)
 # ============================================================================
 # Questa flow (default)
 # ============================================================================
-ifeq ($(SIMULATOR),model)
+ifeq ($(SIMULATOR),questa)
 
 VLOG_FLAGS  = -sv -timescale=1ns/1ps +acc=rn +define+SIM $(INC_DIRS)
 COV_FLAG    = +cover
