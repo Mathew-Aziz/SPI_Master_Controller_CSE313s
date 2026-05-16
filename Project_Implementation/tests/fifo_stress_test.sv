@@ -38,9 +38,9 @@ class fifo_stress_test;
     apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);  // divide /4
     coverage.sample_clk_div(16'h0004);
 
-    for(int width = 0; width < 3; width++) begin
-     
-      tb_top.bfm_width     = 2'(width);
+    for (int width = 0; width < 3; width++) begin
+
+      tb_top.bfm_width = 2'(width);
       coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(width), .loopback(1'b0));
 
       // confirm TX_FIFO is empty
@@ -64,7 +64,7 @@ class fifo_stress_test;
 
       // Push 8 bytes with reading TX_FULL flag, confirm STATUS.FULL (R11)
       for (int i = 0; i < 8; i++) begin
-        uint32_t val = $urandom();
+        int val = $urandom();
         TX_q.push_back(val);
         apb_wr(coverage, APB_TX_DATA, val);
 
@@ -73,9 +73,11 @@ class fifo_stress_test;
 
         apb_rd(coverage, APB_STATUS, rd);
         if (i < 7) begin
-          ref_model.check_tx_status(rd, .expect_full(1'b0), .expect_empty(1'b0), .expect_busy(1'b0));
+          ref_model.check_tx_status(rd, .expect_full(1'b0), .expect_empty(1'b0),
+                                    .expect_busy(1'b0));
         end else begin
-          ref_model.check_tx_status(rd, .expect_full(1'b1), .expect_empty(1'b0), .expect_busy(1'b0));
+          ref_model.check_tx_status(rd, .expect_full(1'b1), .expect_empty(1'b0),
+                                    .expect_busy(1'b0));
         end
       end
 
@@ -93,12 +95,10 @@ class fifo_stress_test;
       coverage.sample_fifo(8, 0);  // TX still full from earlier
 
       for (int i = 0; i < 8; i++) begin
-        uint32_t val = $urandom();
-        RX_q.push_back((width == 0)? val & 8'hFF:
-                        (width == 1)? val & 16'hFFFF:
-                                      val);
+        int val = $urandom();
+        RX_q.push_back((width == 0) ? val & 8'hFF : (width == 1) ? val & 16'hFFFF : val);
         tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = RX_q[i];
-                                      
+
       end
 
       tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
