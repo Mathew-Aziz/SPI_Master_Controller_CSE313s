@@ -6,7 +6,7 @@
 # be consumed directly by the grader without modification.
 # =============================================================================
 
-SIMULATOR ?= questa
+SIMULATOR ?= model
 SEED      ?= 0
 TEST      ?= sanity_test
 WAVES     ?= 0
@@ -68,7 +68,7 @@ REGRESSION_SEEDS ?= 1   # 10 * 20 = 200 runs (well under the 10000 cap)
 # ============================================================================
 # Questa flow (default)
 # ============================================================================
-ifeq ($(SIMULATOR),questa)
+ifeq ($(SIMULATOR),model)
 
 VLOG_FLAGS  = -sv -timescale=1ns/1ps +acc=rn +define+SIM $(INC_DIRS)
 COV_FLAG    = +cover
@@ -105,7 +105,7 @@ endef
 regress: compile
 	@mkdir -p build
 	@$(foreach t,$(REGRESSION_TESTS),$(call REGRESS_ONE,$(t)) ;)
-	vcover merge -out build/merged.ucdb $(wildcard *.ucdb)
+	vcover merge -out build/merged.ucdb *.ucdb
 
 cov:
 	@if [ -f build/merged.ucdb ]; then \
