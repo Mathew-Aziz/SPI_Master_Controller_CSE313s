@@ -6,7 +6,7 @@
 # be consumed directly by the grader without modification.
 # =============================================================================
 
-SIMULATOR ?= questa
+SIMULATOR ?= model
 SEED      ?= 0
 TEST      ?= sanity_test
 WAVES     ?= 0
@@ -19,7 +19,7 @@ MAKE := make
 # changed project root from ../../.. to . since we moved the Makefile from harness/examples/sv_only/ to Project Implementation/
 PROJ_ROOT  ?= .
 HARNESS    ?= $(PROJ_ROOT)/harness
-STUDENT_TB ?= .
+STUDENT_TB ?= $(PROJ_ROOT)/tb
 
 # DUT sources (three-file golden RTL). The grader overrides DUT_SRCS to
 # point at faulty_rtl/*_buggy.sv when it injects a bug.
@@ -30,53 +30,26 @@ DUT_SRCS   ?= \
 DUT_SRC    ?=
 EFF_DUT_SRCS = $(if $(strip $(DUT_SRC)),$(DUT_SRC),$(DUT_SRCS))
 
-BONUS_TEST ?= ral_hw_reset_test
-
 # ---- student source lists ---------------------------------------------------
 TB_SRCS    ?= \
-  $(STUDENT_TB)/tb/apb_master_bfm.sv \
-  $(STUDENT_TB)/tb/spi_slave_bfm.sv \
-  $(STUDENT_TB)/tb/tb_top.sv
+  $(STUDENT_TB)/apb_master_bfm.sv \
+  $(STUDENT_TB)/spi_slave_bfm.sv \
+  $(STUDENT_TB)/tb_top.sv
 
 ENV_SRCS   ?= \
-  $(STUDENT_TB)/env/ref_model.sv \
-  $(STUDENT_TB)/env/coverage.sv
+  $(PROJ_ROOT)/env/ref_model.sv \
+  $(PROJ_ROOT)/env/coverage.sv
 
 SEQ_SRCS   ?= \
-  $(STUDENT_TB)/sequences/stim_lib.sv
+  $(PROJ_ROOT)/sequences/stim_lib.sv
 
 ASSERT_SRCS?= \
-  $(STUDENT_TB)/assertions/spi_sva.sv
+  $(PROJ_ROOT)/assertions/spi_sva.sv
 
-# NOTE: test files (tests/*.sv) are NOT listed here on purpose.
-#
-# The plain-SV scaffold ships test classes that take `ref spi_ref_model` /
-# `ref spi_coverage_col` arguments. Those classes live in env/ref_model.sv
-# and env/coverage.sv (file scope). QuestaSim treats every file in a vlog
-# call as a SEPARATE compilation unit, so file-scope class typenames are
-# NOT visible to a separately-compiled tests/foo.sv. The test files MUST
-# therefore be brought in via `\`include` from inside the tb_top module
-# (where the class names are visible), not as standalone vlog inputs.
-# tb/tb_top.sv already \`include`s tests/sanity_test.sv and
-# tests/ral_hw_reset_test.sv. If you add a new test class:
-#   1) drop it under tests/<your_test>.sv
-#   2) add `\`include "tests/<your_test>.sv"` near the top of tb/tb_top.sv
-#   3) add a dispatcher arm in tb_top's case() statement
-#   4) add the test name to REGRESSION_TESTS below
-# Do NOT add it to a TEST_SRCS variable here.
 
-# tb_top.sv uses `\`include "env/ref_model.sv"` (etc.), so $(STUDENT_TB)
-# itself MUST be on the +incdir+ path. Keep the leaf dirs as well so any
-# helper file that says `\`include "ref_model.sv"` (no leading dir) still
-# resolves.
-INC_DIRS   ?= +incdir+$(HARNESS) +incdir+$(STUDENT_TB) \
-              +incdir+$(STUDENT_TB)/env +incdir+$(STUDENT_TB)/tb \
-              +incdir+$(STUDENT_TB)/sequences +incdir+$(STUDENT_TB)/tests
+INC_DIRS   ?= +incdir+$(HARNESS) +incdir+$(PROJ_ROOT)/env +incdir+$(STUDENT_TB) +incdir+$(PROJ_ROOT)/sequences +incdir+$(PROJ_ROOT)/assertions
 
 # ---- regression list --------------------------------------------------------
-# NOTE: The scaffold only provides sanity_test fleshed out. Students MUST
-# add the other nine required tests before submitting. The grader checks
-# this list matches Section 3 of the grading contract.
 REGRESSION_TESTS = \
   sanity_test \
   reg_access_test \
@@ -89,18 +62,15 @@ REGRESSION_TESTS = \
   delay_transfer_test \
   error_injection_test \
   randomized_sanity_test
-
+ 
 REGRESSION_SEEDS ?= 1   # 10 * 20 = 200 runs (well under the 10000 cap)
 
 # ============================================================================
 # Questa flow (default)
 # ============================================================================
-ifeq ($(SIMULATOR),questa)
+ifeq ($(SIMULATOR),model)
 
 VLOG_FLAGS  = -sv -timescale=1ns/1ps +acc=rn +define+SIM $(INC_DIRS)
-
-# Enable code coverage at compile time (required so vsim does not warn vsim-8634)
-# Questa supports +cover on vlog for line/toggle/branch/condition/FSM coverage.
 COV_FLAG    = +cover
 
 compile:
@@ -118,13 +88,9 @@ compile:
 
 run: compile
 	vsim -c -coverage work.tb_top \
-	     -do "run -all; coverage save cov_$(TEST)_$(SEED).ucdb; quit -f" \
 	     +TESTNAME=$(TEST) +UVM_TESTNAME=$(TEST) +SEED=$(SEED) \
-	     $(if $(filter 1,$(WAVES)), -wlf waves_$(TEST)_$(SEED).wlf,)
+	     -do "coverage save -onexit cov_$(TEST)_$(SEED).ucdb; run -all; quit -f"
 
-run_bonus: compile
-	vsim -c -coverage work.tb_top -do "run -all; coverage save cov_$(BONUS_TEST)_$(SEED).ucdb; quit -f" \
-	     +TESTNAME=$(BONUS_TEST) +UVM_TESTNAME=$(BONUS_TEST) +SEED=$(SEED)
 
 define REGRESS_ONE
 	echo "=== Running $(1) for $(REGRESSION_SEEDS) seeds ===" ; \
@@ -139,7 +105,7 @@ endef
 regress: compile
 	@mkdir -p build
 	@$(foreach t,$(REGRESSION_TESTS),$(call REGRESS_ONE,$(t)) ;)
-	-vcover merge -out build/merged.ucdb $(wildcard cov_*.ucdb)
+	vcover merge -out build/merged.ucdb $(wildcard *.ucdb)
 
 cov:
 	@if [ -f build/merged.ucdb ]; then \
