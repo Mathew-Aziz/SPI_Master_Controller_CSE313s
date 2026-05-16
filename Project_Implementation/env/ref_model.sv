@@ -111,15 +111,15 @@ class spi_ref_model;
 
   // ------------------------------ FIFO checks -------------------------------
   // Verify TX FIFO contents match expected order
-  task verify_tx_fifo_order(input bit [31:0] expected_queue[$]);
+  task verify_tx_fifo_order(input bit [31:0] expected_queue[$], input int width);
     bit [31:0] tx_ptr_base = tb_top.u_wrap.u_dut.u_regfile.tx_rp;
 
     for (int i = 0; i < expected_queue.size(); i++) begin
       int fifo_idx = (tx_ptr_base + i) & 3'h7;  // wrap at 8
       bit [31:0] actual = tb_top.u_wrap.u_dut.u_regfile.tx_mem[fifo_idx];
-
+      
       if (actual !== expected_queue[i]) begin
-        $display("[SCOREBOARD_ERROR] TX_FIFO[%d] (mem[%d]) = 0x%08h, expected 0x%08h", i, fifo_idx,
+        $display("[SCOREBOARD_ERROR] Width[%0d] TX_FIFO[%d] (mem[%d]) = 0x%08h, expected 0x%08h", width, i, fifo_idx,
                  actual, expected_queue[i]);
         error_count++;
       end
