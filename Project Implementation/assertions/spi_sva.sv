@@ -300,7 +300,7 @@ module apb_sva (
   INT_STAT_W1C_RACE_XFER_DONE :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (   (PSEL & PENABLE & ~PWRITE)
+    (   (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && $rose(
       transfer_done_pulse
