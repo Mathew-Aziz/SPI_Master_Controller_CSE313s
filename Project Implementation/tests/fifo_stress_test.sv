@@ -31,7 +31,6 @@ class fifo_stress_test;
     // 1. Configure BFM slave stable mode/width (mode0, width=8) 
     tb_top.bfm_mode      = 2'b00;  // CPOL=0 CPHA=0
     tb_top.bfm_pattern   = 8'hA5;
-    tb_top.bfm_width     = 2'b00;  // 8-bit
     tb_top.bfm_lsb_first = 1'b0;  // MSB-first
     tb_top.bfm_miso_word = 32'h0000_00A5;  // matches bfm_pattern
 
@@ -39,78 +38,88 @@ class fifo_stress_test;
     apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);  // divide /4
     coverage.sample_clk_div(16'h0004);
 
-    coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
+    for(int width = 0; width < 3; i++) begin
+     
+      tb_top.bfm_width     = 2'(width);
+      coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(width), .loopback(1'b0));
 
-    // confirm TX_FIFO is empty
-    apb_rd(coverage, APB_STATUS, rd);
+      // confirm TX_FIFO is empty
+      apb_rd(coverage, APB_STATUS, rd);
 
-    if (rd[2] != 1'b1) begin  // If not empty, drain it first
-      apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // assert ss[0] LOW
-      coverage.sample_ss(4'b0001, 4'b0000);
+      if (rd[2] != 1'b1) begin  // If not empty, drain it first
+        apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // assert ss[0] LOW
+        coverage.sample_ss(4'b0001, 4'b0000);
 
-      repeat (500) begin
+        repeat (500) begin
+          apb_rd(coverage, APB_STATUS, rd);
+          if (rd[0] == 1'b0) break;
+        end
+
+        coverage.sample_busy(1'b0, 2'b00);
+        ref_model.check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
+
+        apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
+        coverage.sample_ss(4'b0000, 4'b0000);
+      end
+
+      // Push 8 bytes with reading TX_FULL flag, confirm STATUS.FULL (R11)
+      for (int i = 0; i < 8; i++) begin
+        uint32_t val = $urandom();
+        TX_q.push_back(val);
+        apb_wr(coverage, APB_TX_DATA, val);
+
+        // Track FIFO occupancy for coverage (best-effort)
+        coverage.sample_fifo(i + 1, 0);
+
         apb_rd(coverage, APB_STATUS, rd);
-        if (rd[0] == 1'b0) break;
+        if (i < 7) begin
+          ref_model.check_tx_status(rd, .expect_full(1'b0), .expect_empty(1'b0), .expect_busy(1'b0));
+        end else begin
+          ref_model.check_tx_status(rd, .expect_full(1'b1), .expect_empty(1'b0), .expect_busy(1'b0));
+        end
       end
 
-      coverage.sample_busy(1'b0, 2'b00);
-      ref_model.check_reg_masked("STATUS", 8'b0000_0100, rd, 8'b0000_0100);
+      // Verify FIFO order via direct probing (R9)
+      ref_model.verify_tx_fifo_order(TX_q);
 
-      apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert ss[0] HIGH
-      coverage.sample_ss(4'b0000, 4'b0000);
-    end
+      // Fill RX to depth 8 without reading (R12), then read out and verify ordering (R10)
 
-    // Push 8 bytes with reading TX_FULL flag, confirm STATUS.FULL (R11)
-    for (int i = 0; i < 8; i++) begin
-      TX_q.push_back(32'(i));
-      apb_wr(coverage, APB_TX_DATA, 32'(i));
-
-      // Track FIFO occupancy for coverage (best-effort)
-      coverage.sample_fifo(i + 1, 0);
-
-      apb_rd(coverage, APB_STATUS, rd);
-      if (i < 7) begin
-        ref_model.check_tx_status(rd, .expect_full(1'b0), .expect_empty(1'b0), .expect_busy(1'b0));
-      end else begin
-        ref_model.check_tx_status(rd, .expect_full(1'b1), .expect_empty(1'b0), .expect_busy(1'b0));
+      // Empty RX FIFO by reading until empty
+      repeat (20) begin
+        apb_rd(coverage, APB_STATUS, rd);
+        if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
+        apb_rd(coverage, APB_RX_DATA, rd);
       end
-    end
+      coverage.sample_fifo(8, 0);  // TX still full from earlier
 
-    // Verify FIFO order via direct probing (R9)
-    ref_model.verify_tx_fifo_order(TX_q);
+      for (int i = 0; i < 8; i++) begin
+        uint32_t val = $urandom();
+        RX_q.push_back((width == 0)? val & 8'hFF:
+                        (width == 1)? val & 16'hFFFF:
+                                      val);
+        tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = RX_q[i];
+                                      
+      end
 
-    // Fill RX to depth 8 without reading (R12), then read out and verify ordering (R10)
+      tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
 
-    // Empty RX FIFO by reading until empty
-    repeat (20) begin
       apb_rd(coverage, APB_STATUS, rd);
-      if (rd[4] == 1'b1) break;  // RX_EMPTY=1 means empty
-      apb_rd(coverage, APB_RX_DATA, rd);
+      ref_model.check_rx_status(rd, .expect_full(1'b1), .expect_empty(1'b0));
+      coverage.sample_fifo(8, 8);
+
+      // Read out RX FIFO and verify order (R10)
+      for (int i = 0; i < 8; i++) begin
+        apb_rd(coverage, APB_RX_DATA, rd);
+        ref_model.check_reg("RX_DATA", RX_q[i], rd);
+        coverage.sample_fifo(8, 7 - i);
+      end
+
+      // Check STATUS shows RX_EMPTY after reading all 8
+      apb_rd(coverage, APB_STATUS, rd);
+      ref_model.check_rx_status(rd, .expect_full(1'b0), .expect_empty(1'b1));
+      coverage.sample_fifo(8, 0);
+
     end
-    coverage.sample_fifo(8, 0);  // TX still full from earlier
-
-    for (int i = 0; i < 8; i++) begin
-      RX_q.push_back(32'h1000_0000 + i);
-      tb_top.u_wrap.u_dut.u_regfile.rx_mem[i] = 32'h1000_0000 + i;
-    end
-
-    tb_top.u_wrap.u_dut.u_regfile.rx_wp = 4'h8;
-
-    apb_rd(coverage, APB_STATUS, rd);
-    ref_model.check_rx_status(rd, .expect_full(1'b1), .expect_empty(1'b0));
-    coverage.sample_fifo(8, 8);
-
-    // Read out RX FIFO and verify order (R10)
-    for (int i = 0; i < 8; i++) begin
-      apb_rd(coverage, APB_RX_DATA, rd);
-      ref_model.check_reg("RX_DATA", RX_q[i], rd);
-      coverage.sample_fifo(8, 7 - i);
-    end
-
-    // Check STATUS shows RX_EMPTY after reading all 8
-    apb_rd(coverage, APB_STATUS, rd);
-    ref_model.check_rx_status(rd, .expect_full(1'b0), .expect_empty(1'b1));
-    coverage.sample_fifo(8, 0);
 
     $display("[INFO] fifo_stress_test: finished, errors=%0d", ref_model.error_count);
   endtask

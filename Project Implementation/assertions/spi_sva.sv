@@ -226,7 +226,7 @@ module apb_sva (
   INT_STAT_W1C_NORMAL :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (  (PSEL & PENABLE & ~PWRITE)
+    (  (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && !($rose(
       transfer_done_pulse
@@ -249,7 +249,7 @@ module apb_sva (
   INT_STAT_W1C_RACE_RX_OVF :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (   (PSEL & PENABLE & ~PWRITE)
+    (   (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && $rose(
       rx_push_valid
@@ -266,7 +266,7 @@ module apb_sva (
   INT_STAT_W1C_RACE_RX_FULL :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (   (PSEL & PENABLE & ~PWRITE)
+    (   (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && $rose(
       rx_push_valid
@@ -282,7 +282,7 @@ module apb_sva (
   INT_STAT_W1C_RACE_TX_EMPTY :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (   (PSEL & PENABLE & ~PWRITE)
+    (   (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && $rose(
       tx_pop
@@ -300,7 +300,7 @@ module apb_sva (
   INT_STAT_W1C_RACE_XFER_DONE :
   assert property (
     @(posedge PCLK) disable iff (!PRESETn)
-    (   (PSEL & PENABLE & ~PWRITE)
+    (   (PSEL & PENABLE & PWRITE)
      && (PADDR == 8'h1C)
      && $rose(
       transfer_done_pulse
