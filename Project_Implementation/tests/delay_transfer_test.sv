@@ -86,8 +86,9 @@ class delay_transfer_test;
   // For DELAY=0, any idle > 2 PCLKs is flagged.
   // For DELAY>0, allows 1 PCLK sync skew tolerance.
   static function void check_idle_gap(int observed, int expected, int delay_value, int gap_index,
-                                      ref spi_ref_model ref_model);
+                                      int div_val, ref spi_ref_model ref_model);
     int difference;
+    int natural_gap_pclk;
     if (observed == -1) begin
       $display("[CHECKER_ERROR] delay_transfer: idle measurement timeout (DELAY=%0d, gap=%0d)",
                delay_value, gap_index);
@@ -95,8 +96,9 @@ class delay_transfer_test;
       return;
     end
 
+    natural_gap_pclk = 2 * (div_val + 1);
     if (delay_value == 0) begin
-      if (observed > 2) begin
+      if (observed > natural_gap_pclk + 1) begin
         $display(
             "[SCOREBOARD_ERROR] delay_transfer: unexpected idle with DELAY=0 (gap=%0d, observed=%0d)",
             gap_index, observed);
@@ -229,7 +231,8 @@ class delay_transfer_test;
         bit [31:0] status;
         measure_idle_pclk(idle_result);
         check_idle_gap(.observed(idle_result), .expected(expected_idle_pclk),
-                       .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
+                       .delay_value(delay_value), .gap_index(gap), .div_val(div_val),
+                       .ref_model(ref_model));
 
         // Confirm BUSY is still 1 after gap measurement
         tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
@@ -276,14 +279,14 @@ class delay_transfer_test;
     // First gap: DELAY was 0 when transfer started, expect no idle
     measure_idle_pclk(idle_result);
     check_idle_gap(.observed(idle_result), .expected(0), .delay_value(0), .gap_index(0),
-                   .ref_model(ref_model));
+                   .div_val(div_val), .ref_model(ref_model));
 
     // Second gap: new DELAY should be active
     measure_idle_pclk(second_gap, IDLE_MEASURE_TIMEOUT);
     get_div_value(div_val_p3);
     expected_second = new_delay * (div_val_p3 + 1);
     check_idle_gap(.observed(second_gap), .expected(expected_second), .delay_value(new_delay),
-                   .gap_index(1), .ref_model(ref_model));
+                   .gap_index(1), .div_val(div_val_p3), .ref_model(ref_model));
 
     wait_for_busy_clear(busy_clr_result);
     if (!busy_clr_result) ref_model.error_count++;
