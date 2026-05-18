@@ -194,10 +194,11 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
     coverage.sample_ss(4'b0001, 4'b0000);
 
+    get_div_value(div_val);
+
     // --- Phase 2: Idle Cycle Verification ---
     foreach (delay_values[i]) begin
       delay_value = delay_values[i];
-      get_div_value(div_val);
       expected_idle_pclk = (2 + delay_value) * (div_val + 1);  // natural gap + DELAY half-cycles
 
       tb_top.u_apb_bfm.apb_write(APB_DELAY, delay_value);
