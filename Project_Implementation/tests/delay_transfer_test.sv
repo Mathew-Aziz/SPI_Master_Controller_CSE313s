@@ -35,14 +35,15 @@ class delay_transfer_test;
   // Returns -1 on timeout or if BUSY deasserts unexpectedly (R21 violation).
   // CONVERTED: function -> task (contains timing controls)
   static task measure_idle_pclk(output int result, input int timeout = IDLE_MEASURE_TIMEOUT);
-    logic        cpol = tb_top.bfm_mode[1];  // CPOL: MODE[1] (R4)
+    logic        cpol;
     int unsigned div_val;
     int unsigned half_cycle_pclk;
     int unsigned count;
 
+    cpol = tb_top.bfm_mode[1];      // CPOL: MODE[1] (R4)
     get_div_value(div_val);
     half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
-    count = 2 * half_cycle_pclk;  // confirmation window + one count-loop cycle pre-check
+    count = 2 * half_cycle_pclk;    // confirmation window + one count-loop cycle pre-check
 
     // Wait for SCLK to reach idle level, confirmed stable for one half-cycle
     while (timeout > 0) begin
@@ -99,8 +100,8 @@ class delay_transfer_test;
   endfunction
 
   static task drain_rx(input int num_words, ref spi_ref_model ref_model);
+    bit [31:0] rx_data;
     for (int i = 0; i < num_words; i++) begin
-      bit [31:0] rx_data;
       tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_data);  // Capture read value
       ref_model.verify_rx_drain(.observed(rx_data), .width(8));  // Check + pop
     end
@@ -211,7 +212,6 @@ class delay_transfer_test;
       coverage.sample_busy(1'b1, 2'b00);
 
       for (gap = 0; gap < 2; gap++) begin  // 2 gaps for 3 words
-        bit [31:0] status;
         measure_idle_pclk(idle_result);
         check_idle_gap(.observed(idle_result), .expected(expected_idle_pclk),
                        .delay_value(delay_value), .gap_index(gap), .ref_model(ref_model));
