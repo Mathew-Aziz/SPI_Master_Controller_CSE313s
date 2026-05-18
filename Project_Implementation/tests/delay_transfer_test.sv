@@ -23,6 +23,11 @@ localparam SS_DISABLE = 32'h0000_0000;
 `endif
 
 class delay_transfer_test;
+  // CONTRACT: Enforces predict_transfer() before every TX push
+  static task push_tx_word(input byte word, ref spi_ref_model ref_model);
+    ref_model.predict_transfer(.tx_word(word), .width(8), .miso_word(32'h00), .loopback(1'b0));
+    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
+  endtask
 
   // CONVERTED: function -> task (apb_read is a task with timing)
   static task automatic get_div_value(output int div_value);
@@ -40,10 +45,10 @@ class delay_transfer_test;
     int unsigned half_cycle_pclk;
     int unsigned count;
 
-    cpol = tb_top.bfm_mode[1];      // CPOL: MODE[1] (R4)
+    cpol = tb_top.bfm_mode[1];  // CPOL: MODE[1] (R4)
     get_div_value(div_val);
     half_cycle_pclk = div_val + 1;  // R8: one SCLK half-cycle = (DIV+1) PCLKs
-    count = 2 * half_cycle_pclk;    // confirmation window + one count-loop cycle pre-check
+    count = 2 * half_cycle_pclk;  // confirmation window + one count-loop cycle pre-check
 
     // Wait for SCLK to reach idle level, confirmed stable for one half-cycle
     while (timeout > 0) begin
@@ -200,8 +205,7 @@ class delay_transfer_test;
 
       foreach (tx_words[j]) begin
         word = tx_words[j];
-        ref_model.predict_transfer(.tx_word(word), .width(8), .miso_word(32'h00), .loopback(1'b0));
-        tb_top.u_apb_bfm.apb_write(APB_TX_DATA, word);
+        push_tx_word(word, ref_model);
       end
 
       wait_for_busy_set(busy_set_result);
@@ -238,9 +242,7 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd0);
     coverage.sample_delay(.delay_val(8'd0), .queued(1'b0));
 
-    ref_model.predict_transfer(.tx_word(tx_words[0]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[0]);
+    push_tx_word(tx_words[0], ref_model);
 
     wait_for_busy_set(busy_set_result, TIMEOUT_CYCLES);
     if (!busy_set_result) ref_model.error_count++;
@@ -250,13 +252,9 @@ class delay_transfer_test;
     tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
     coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
-    ref_model.predict_transfer(.tx_word(tx_words[1]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[1]);
+    push_tx_word(tx_words[1], ref_model);
 
-    ref_model.predict_transfer(.tx_word(tx_words[2]), .width(8), .miso_word(32'h00),
-                               .loopback(1'b0));
-    tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
+    push_tx_word(tx_words[2], ref_model);
 
     // First gap: cfg_delay=new_delay is live before S_FINISH fires for word0,
     measure_idle_pclk(idle_result);
