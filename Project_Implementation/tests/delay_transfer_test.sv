@@ -171,10 +171,10 @@ class delay_transfer_test;
     tb_top.PRESETn = 1;
     repeat (2) @(posedge tb_top.PCLK);
 
-    tb_top.bfm_mode      = 2'b00;   // Mode 0 (CPOL=0, CPHA=0)
-    tb_top.bfm_width     = 2'b00;   // 8-bit width
-    tb_top.bfm_lsb_first = 1'b0;    // MSB-first
-    tb_top.bfm_miso_word = 8'h00;   // Dummy echo
+    tb_top.bfm_mode      = 2'b00;  // Mode 0 (CPOL=0, CPHA=0)
+    tb_top.bfm_width     = 2'b00;  // 8-bit width
+    tb_top.bfm_lsb_first = 1'b0;  // MSB-first
+    tb_top.bfm_miso_word = 8'h00;  // Dummy echo
     coverage.sample_config(.mode(2'b00), .lsb_first(1'b0), .width(2'b00), .loopback(1'b0));
 
     tb_top.u_apb_bfm.apb_write(APB_CTRL, CTRL_DEFAULT);
