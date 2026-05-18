@@ -1,10 +1,10 @@
 //- TP-CLK-01/02 (+ TP-SPI-05 sampled-at-start with mid-transfer DIV write)
 `ifndef CLK_DIV_CORNER_TEST_SV
-`define CLK_DIV_CORNER_TEST_SV
+`define CLK_DIV_CORNER_TEST_SV 
 
 // Magic Numbers
 `ifndef EDGE_DETECTION_PATTERN
-localparam int [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+localparam bit [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 `endif
 
 `ifndef CLK_DIV_TIMEOUT_CYCLES
@@ -209,7 +209,7 @@ class clk_div_corner_test;
     apb_wr(APB_CLK_DIV, SS_DISABLE, coverage);  // DIV=0 baseline
     coverage.sample_clk_div(16'h0000);
 
-    apb_wr(APB_SS_CTRL, SS_EN0, coverage); 
+    apb_wr(APB_SS_CTRL, SS_EN0, coverage);
     coverage.sample_ss(4'b0001, 4'b0000);
 
     // --- Phase 2: Corner Cases ---
