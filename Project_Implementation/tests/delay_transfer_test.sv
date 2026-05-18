@@ -59,17 +59,10 @@ class delay_transfer_test;
     end
 
     // Count idle PCLKs until SCLK leaves idle level.
-    // Start at half_cycle_pclk to account for the confirmation window already elapsed.
+    // BUSY is verified at gap boundaries by wait_for_busy_set/clear; no APB reads here
+    // to avoid corrupting the cycle count.
     while (timeout > 0) begin
-      bit [31:0] status;
       @(posedge tb_top.PCLK);
-
-      tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
-      if ((status & 32'h1) == 0) begin
-        $display("[CHECKER_ERROR] delay_transfer: BUSY deasserted during DELAY gap");
-        result = -1;
-        return;
-      end
 
       if (tb_top.u_wrap.u_dut.u_core.SCLK != cpol) begin
         result = count;
