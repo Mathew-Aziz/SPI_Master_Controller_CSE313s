@@ -258,11 +258,11 @@ class delay_transfer_test;
                                .loopback(1'b0));
     tb_top.u_apb_bfm.apb_write(APB_TX_DATA, tx_words[2]);
 
-    // First gap: DELAY was 0 when transfer started, expect only natural gap
+    // First gap: cfg_delay=new_delay is live before S_FINISH fires for word0,
     measure_idle_pclk(idle_result);
     get_div_value(div_val);
-    check_idle_gap(.observed(idle_result), .expected(2 * (div_val + 1)), .delay_value(0),
-                   .gap_index(0), .ref_model(ref_model));
+    check_idle_gap(.observed(idle_result), .expected((2 + new_delay) * (div_val + 1)),
+                   .delay_value(new_delay), .gap_index(0), .ref_model(ref_model));
 
     // Second gap: new DELAY should be active
     measure_idle_pclk(second_gap, IDLE_MEASURE_TIMEOUT);
