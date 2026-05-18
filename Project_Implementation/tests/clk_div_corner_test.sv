@@ -1,10 +1,10 @@
 //- TP-CLK-01/02 (+ TP-SPI-05 sampled-at-start with mid-transfer DIV write)
 `ifndef CLK_DIV_CORNER_TEST_SV
-`define CLK_DIV_CORNER_TEST_SV 
+`define CLK_DIV_CORNER_TEST_SV
 
 // Magic Numbers
 `ifndef EDGE_DETECTION_PATTERN
-localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+localparam int [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 `endif
 
 `ifndef CLK_DIV_TIMEOUT_CYCLES
@@ -53,7 +53,6 @@ class clk_div_corner_test;
     int count = 0;
     period = -1;  // Error unless changed
 
-    // NOTE: DUT core signal is SCLK (uppercase) in tb_top bind; 'sclk' was unresolved.
     wait (tb_top.u_wrap.u_dut.u_core.SCLK == 0);
 
     @(posedge tb_top.u_wrap.u_dut.u_core.SCLK);
@@ -73,7 +72,6 @@ class clk_div_corner_test;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
 
-      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
       tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
       if ((status & 1) == 0) begin
         cleared = 1;
@@ -90,7 +88,6 @@ class clk_div_corner_test;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
 
-      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
       tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
       if ((status & 1) == 1) begin
         set = 1;
@@ -131,8 +128,8 @@ class clk_div_corner_test;
                mid_period);
       ref_model.error_count++;
     end
-    // Cleanup
 
+    // Cleanup
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // Verify + pop in one call
 
@@ -193,7 +190,8 @@ class clk_div_corner_test;
     int expected_period;
     int measured_period;
     byte rx_data;
-    // --- Phase 1: BFM & Register Init ---    
+
+    // --- Phase 1: BFM & Register Init ---
     $display("[INFO] clk_div_corner_test: starting");
     // Reset Sequence
     tb_top.PRESETn = 0;
@@ -211,7 +209,7 @@ class clk_div_corner_test;
     apb_wr(APB_CLK_DIV, SS_DISABLE, coverage);  // DIV=0 baseline
     coverage.sample_clk_div(16'h0000);
 
-    apb_wr(APB_SS_CTRL, SS_EN0, coverage);  // SS_EN[0]=1, SS_VAL[0]=0
+    apb_wr(APB_SS_CTRL, SS_EN0, coverage); 
     coverage.sample_ss(4'b0001, 4'b0000);
 
     // --- Phase 2: Corner Cases ---
