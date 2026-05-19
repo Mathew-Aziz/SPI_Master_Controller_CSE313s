@@ -165,7 +165,9 @@ class clk_div_corner_test;
       ref_model.error_count++;
     end
 
-    // Cleanup
+    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);  // ensure transfer 1 done
+    if (!cleared) ref_model.error_count++;
+
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // Verify + pop in one call
 
@@ -292,7 +294,6 @@ class clk_div_corner_test;
 
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
     test_mid_transfer_div_update(ref_model, coverage);
-    cleanup();
     coverage.sample_ss(4'b0000, 4'b0000);
 
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
