@@ -63,7 +63,7 @@ REGRESSION_TESTS = \
   error_injection_test \
   randomized_sanity_test
  
-REGRESSION_SEEDS ?= 4   # 10 * 20 = 200 runs (well under the 10000 cap)
+REGRESSION_SEEDS ?= 8   # 10 * 20 = 200 runs (well under the 10000 cap)
 
 # ============================================================================
 # Questa flow (default)
