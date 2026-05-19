@@ -22,6 +22,7 @@ class reg_access_test;
     bit [31:0] rd;
     bit [31:0] rd_small = 32'h0000_0001;
     bit [31:0] rd_big = 32'hA5A5_5A5A;
+    bit [31:0] rd_rx;
 
 
     $display("[INFO] reg_access_test: starting");
@@ -35,8 +36,8 @@ class reg_access_test;
     coverage.sample_reset(APB_CTRL, (rd == 32'h0));
 
     apb_rd(coverage, APB_STATUS, rd);
-    ref_model.check_reg("STATUS", 32'h0000_0012, rd);
-    coverage.sample_reset(APB_STATUS, (rd == 32'h0000_0012));
+    ref_model.check_reg("STATUS", 32'h0000_0014, rd);
+    coverage.sample_reset(APB_STATUS, (rd == 32'h0000_0014));
 
     apb_rd(coverage, APB_TX_DATA, rd);
     ref_model.check_reg("TX_DATA", 32'h0, rd);
@@ -118,7 +119,7 @@ class reg_access_test;
     // STATUS is RO: write should not change it
     apb_wr(coverage, APB_STATUS, 32'hFFFF_FFFF);
     apb_rd(coverage, APB_STATUS, rd);
-    ref_model.check_reg("STATUS_RO", 32'h0000_0012, rd);
+    ref_model.check_reg("STATUS_RO", 32'h0000_0014, rd);
 
     // TX_DATA read returns 0
     apb_rd(coverage, APB_TX_DATA, rd);
@@ -176,7 +177,7 @@ class reg_access_test;
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
     coverage.sample_ss(4'b0001, 4'b0000);
 
-    apb_rd(coverage, APB_RX_DATA, rd);
+    apb_rd(coverage, APB_RX_DATA, rd_rx);
     apb_wr(coverage, APB_SS_CTRL, 32'h0);
     coverage.sample_ss(4'b0000, 4'b0000);
 
@@ -185,8 +186,8 @@ class reg_access_test;
     ref_model.check_tx_status(rd, 1'b0, 1'b1, 1'b0);  // full=0, empty=1, busy=0
     ref_model.check_rx_status(rd, 1'b0, 1'b1);  // full=0, empty=1
 
-    if (rd !== 32'h0) begin
-      ref_model.checker_error("EN0_RX_NONZERO", $sformatf("RX_DATA=0x%08h (expected 0)", rd));
+    if (rd_rx !== 32'h0) begin
+      ref_model.checker_error("EN0_RX_NONZERO", $sformatf("RX_DATA=0x%08h (expected 0)", rd_rx));
     end
 
     $display("[INFO] reg_access_test: finished, errors=%0d", ref_model.error_count);
