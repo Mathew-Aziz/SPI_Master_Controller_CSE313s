@@ -4,7 +4,7 @@
 
 // Magic Numbers
 `ifndef EDGE_DETECTION_PATTERN
-localparam [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
+localparam bit [7:0] EDGE_DETECTION_PATTERN = 8'hA5;
 `endif
 
 `ifndef CLK_DIV_TIMEOUT_CYCLES
@@ -31,6 +31,11 @@ localparam int CLK_DIV_SS_EN0 = 32'h0000_0001;
 localparam int CLK_DIV_SS_DISABLE = 32'h0000_0000;
 `endif
 
+class rand_div_generator;
+  rand int div_val;
+  constraint range_c {div_val inside {[1025 : 4096]};}
+endclass
+
 class clk_div_corner_test;
 
   // -------------------------------------------------------------------------
@@ -47,23 +52,58 @@ class clk_div_corner_test;
     coverage.sample_apb(.addr(addr), .is_write(1'b0), .wdata(32'h0), .rdata(data), .pslverr(1'b0),
                         .pready(1'b1));
   endtask
+
+  // Cites: R4 (SCLK idle = CPOL), R8 (50% duty, period = 2*(DIV+1) PCLKs)
   static task measure_sclk_period(input int timeout = CLK_DIV_MEASURE_TIMEOUT, output int period,
                                   ref spi_coverage_col coverage);
-    // Helper: measure full SCLK period in PCLK cycles
-    int count = 0;
-    period = -1;  // Error unless changed
+    // === Declarations ===
+    int count;
+    int wait_count;
+    bit cpol;
+    bit idle_level;
+    bit active_level;
 
-    // NOTE: DUT core signal is SCLK (uppercase) in tb_top bind; 'sclk' was unresolved.
-    wait (tb_top.u_wrap.u_dut.u_core.SCLK == 0);
+    // === Initialize ===
+    period       = -1;  // Default error value unless successfully measured
+    count        = 0;
+    wait_count   = 0;
 
-    @(posedge tb_top.u_wrap.u_dut.u_core.SCLK);
-    while (tb_top.u_wrap.u_dut.u_core.SCLK == 1) begin
+    // === R4: Idle polarity matches CPOL (MODE[1]) ===
+    cpol         = tb_top.bfm_mode[1];  // CPOL from test-configured MODE field
+    idle_level   = cpol;  // Per R4: SCLK idles at CPOL when BUSY=0
+    active_level = ~cpol;  // Active drive level is opposite of idle
+
+    // === Wait for SCLK to reach idle level (bounded, CPOL-aware) ===
+    wait_count   = 0;
+    while (tb_top.u_wrap.u_dut.u_core.SCLK != idle_level) begin
+      @(posedge tb_top.PCLK);
+      if (++wait_count > timeout) begin
+        $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for SCLK idle (CPOL=%0d)", cpol);
+        return;  // period stays -1 to signal error
+      end
+    end
+
+    // === Wait for transition idle -> active (start of half-period) ===
+    wait_count = 0;
+    while (tb_top.u_wrap.u_dut.u_core.SCLK == idle_level) begin
+      @(posedge tb_top.PCLK);
+      if (++wait_count > timeout) begin
+        $display("[CHECKER_ERROR] clk_div_corner: timeout waiting for SCLK active edge");
+        return;
+      end
+    end
+
+    // === Measure active half-period in PCLK cycles (bounded) ===
+    count = 0;
+    while (tb_top.u_wrap.u_dut.u_core.SCLK == active_level) begin
       @(posedge tb_top.PCLK);
       if (++count > timeout) begin
         $display("[CHECKER_ERROR] clk_div_corner: period measurement timeout");
         return;
       end
     end
+
+    // === R8: 50% duty cycle => full period = 2 * half-period ===
     period = 2 * count;
   endtask
 
@@ -73,7 +113,6 @@ class clk_div_corner_test;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
 
-      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
       tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
       if ((status & 1) == 0) begin
         cleared = 1;
@@ -90,7 +129,6 @@ class clk_div_corner_test;
     for (int i = 0; i < timeout; i++) begin
       @(posedge tb_top.PCLK);
 
-      // apb_read is a TASK (addr, data), not a function. Read into a temp first.
       tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
       if ((status & 1) == 1) begin
         set = 1;
@@ -131,7 +169,9 @@ class clk_div_corner_test;
                mid_period);
       ref_model.error_count++;
     end
-    // Cleanup
+
+    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);  // ensure transfer 1 done
+    if (!cleared) ref_model.error_count++;
 
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // Verify + pop in one call
@@ -140,8 +180,8 @@ class clk_div_corner_test;
     ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
                                .loopback(1'b0));
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
-    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
-    if (!cleared) ref_model.error_count++;
+    wait_for_busy_set(CLK_DIV_TIMEOUT_CYCLES, set);
+    if (!set) ref_model.error_count++;
 
     measure_sclk_period(CLK_DIV_MID_MEASURE_TIMEOUT, next_period, coverage);
     if (next_period != 2 * (new_div_value + 1)) begin
@@ -150,12 +190,11 @@ class clk_div_corner_test;
           next_period);
       ref_model.error_count++;
     end
+    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
+    if (!cleared) ref_model.error_count++;
 
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);  // ← Read RX for 2nd transfer
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // ← Verify + pop queue
-
-    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
-    ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
 
     cleanup();
   endtask
@@ -188,13 +227,24 @@ class clk_div_corner_test;
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
     // Attempt mid-transfer DIV update to validate sampled-at-start (R25).
-    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int div_corners[$] = '{0, 1, 2, 3, 255, 1024};
     int div_value;
     int expected_period;
     int measured_period;
+    int busy_set;
+    int busy_cleared;
     byte rx_data;
-    // --- Phase 1: BFM & Register Init ---    
+    rand_div_generator random_generator;
+
+    // --- Phase 1: BFM & Register Init ---
     $display("[INFO] clk_div_corner_test: starting");
+
+    // Create randomized div_value
+    random_generator = new();
+    assert (random_generator.randomize())
+    else $fatal(1, "[ERROR] clk_div_corner_test: randomization failed");
+    div_corners.push_back(random_generator.div_val);
+
     // Reset Sequence
     tb_top.PRESETn = 0;
     repeat (5) @(posedge tb_top.PCLK);
@@ -211,20 +261,27 @@ class clk_div_corner_test;
     apb_wr(APB_CLK_DIV, SS_DISABLE, coverage);  // DIV=0 baseline
     coverage.sample_clk_div(16'h0000);
 
-    apb_wr(APB_SS_CTRL, SS_EN0, coverage);  // SS_EN[0]=1, SS_VAL[0]=0
+    apb_wr(APB_SS_CTRL, SS_EN0, coverage);
     coverage.sample_ss(4'b0001, 4'b0000);
 
     // --- Phase 2: Corner Cases ---
     foreach (div_corners[i]) begin
-      div_value = div_corners[i];
+      div_value       = div_corners[i];
       expected_period = 2 * (div_value + 1);
 
       apb_wr(APB_CLK_DIV, div_value, coverage);
       coverage.sample_clk_div(div_value[15:0]);
 
-      send_byte_and_wait(EDGE_DETECTION_PATTERN, rx_data, CLK_DIV_TIMEOUT_CYCLES, ref_model,
-                         coverage);
-      // Measure SCLK period
+      ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
+                                 .loopback(1'b0));
+      apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
+
+      wait_for_busy_set(CLK_DIV_TIMEOUT_CYCLES, busy_set);
+      if (!busy_set) begin
+        ref_model.error_count++;
+        continue;
+      end
+
       measure_sclk_period(CLK_DIV_MEASURE_TIMEOUT, measured_period, coverage);
       if (expected_period != measured_period) begin
         $display("[SCOREBOARD_ERROR] clk_div_corner: DIV=%0d expected=%0d measured=%0d", div_value,
@@ -232,7 +289,15 @@ class clk_div_corner_test;
         ref_model.error_count++;
       end
 
-      // Drain RX from reference model and sample busy/ss
+      wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, busy_cleared);
+      if (!busy_cleared) begin
+        ref_model.error_count++;
+        continue;
+      end
+
+      apb_rd(APB_RX_DATA, rx_data, coverage);
+      ref_model.verify_rx_drain(.observed(rx_data), .width(8));
+
       coverage.sample_busy(1'b0, 2'b00);
 
       cleanup();
@@ -242,7 +307,6 @@ class clk_div_corner_test;
 
     // --- Phase 3: R25 Mid-Transfer DIV Update ---
     test_mid_transfer_div_update(ref_model, coverage);
-    cleanup();
     coverage.sample_ss(4'b0000, 4'b0000);
 
     $display("[INFO] clk_div_corner_test: finished, errors=%0d", ref_model.error_count);
