@@ -47,7 +47,7 @@ class interrupt_test;
     // - W1C race (R18)
 
     //*======================TX_OVF IRQ test=========================
-    $$display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting");
+    $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting");
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
