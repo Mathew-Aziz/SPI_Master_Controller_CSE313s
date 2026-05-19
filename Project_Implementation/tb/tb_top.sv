@@ -214,7 +214,9 @@ module tb_top;
 
   // ----------------- Safety timeout ---------------------------------------
   initial begin
-    #10_000_000;  // 10 ms worth of sim time
+    // 12 ms worth of sim time
+    // After TA approved of increasing it from 10ms
+    #12_000_000;
     $display("[TEST_FAILED] %s errors=1  (timeout)", testname);
     $finish;
   end
