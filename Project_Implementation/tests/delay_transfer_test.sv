@@ -260,6 +260,7 @@ class delay_transfer_test;
     coverage.sample_busy(1'b0, 2'b00);
 
     drain_rx(3, ref_model);
+    coverage.sample_delay(.delay_val(new_delay), .queued(1'b0));
     cleanup(coverage);
     $display("[INFO] delay_transfer_test: finished, errors=%0d", ref_model.error_count);
   endtask
