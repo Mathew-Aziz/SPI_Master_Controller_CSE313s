@@ -31,6 +31,11 @@ localparam int CLK_DIV_SS_EN0 = 32'h0000_0001;
 localparam int CLK_DIV_SS_DISABLE = 32'h0000_0000;
 `endif
 
+class rand_div_generator;
+  rand int div_val;
+  constraint range_c {div_val inside {[1025 : 4096]};}
+endclass
+
 class clk_div_corner_test;
 
   // -------------------------------------------------------------------------
@@ -229,9 +234,17 @@ class clk_div_corner_test;
     int busy_set;
     int busy_cleared;
     byte rx_data;
+    rand_div_generator random_generator;
 
     // --- Phase 1: BFM & Register Init ---
     $display("[INFO] clk_div_corner_test: starting");
+
+    // Create randomized div_value
+    random_generator = new();
+    assert (random_generator.randomize())
+    else $fatal(1, "[ERROR] clk_div_corner_test: randomization failed");
+    div_corners.push_back(random_generator.div_val);
+
     // Reset Sequence
     tb_top.PRESETn = 0;
     repeat (5) @(posedge tb_top.PCLK);
