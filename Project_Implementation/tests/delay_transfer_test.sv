@@ -236,7 +236,14 @@ class delay_transfer_test;
     coverage.sample_busy(1'b1, 2'b00);
 
     // Update DELAY mid-transfer; should apply starting from the second inter-word gap
+    // Read STATUS immediately before the write to close the TP-DLY-02
+    tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
+    if (!status[0]) begin
+      $display("[CHECKER_ERROR] delay_transfer: BUSY not asserted at mid-transfer DELAY write");
+      ref_model.error_count++;
+    end
     tb_top.u_apb_bfm.apb_write(APB_DELAY, new_delay);
+    coverage.sample_busy(status[0], 2'b00);
     coverage.sample_delay(.delay_val(new_delay), .queued(1'b1));
 
     push_tx_word(tx_words[1], ref_model);
