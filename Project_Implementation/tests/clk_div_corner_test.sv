@@ -152,6 +152,8 @@ class clk_div_corner_test;
 
     apb_wr(APB_CLK_DIV, old_div_value, coverage);
     coverage.sample_clk_div(old_div_value[15:0]);
+    // Record that CLK_DIV was written while BUSY=1 (TP-SPI-05 bin)
+    coverage.sample_busy(1'b1, 2'b00);
 
     ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
                                .loopback(1'b0));
