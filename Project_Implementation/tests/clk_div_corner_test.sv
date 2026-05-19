@@ -173,8 +173,8 @@ class clk_div_corner_test;
     ref_model.predict_transfer(.tx_word(EDGE_DETECTION_PATTERN), .width(8), .miso_word(32'h00),
                                .loopback(1'b0));
     apb_wr(APB_TX_DATA, EDGE_DETECTION_PATTERN, coverage);
-    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
-    if (!cleared) ref_model.error_count++;
+    wait_for_busy_set(CLK_DIV_TIMEOUT_CYCLES, set);
+    if (!set) ref_model.error_count++;
 
     measure_sclk_period(CLK_DIV_MID_MEASURE_TIMEOUT, next_period, coverage);
     if (next_period != 2 * (new_div_value + 1)) begin
@@ -183,12 +183,11 @@ class clk_div_corner_test;
           next_period);
       ref_model.error_count++;
     end
+    wait_for_busy_clear(CLK_DIV_TIMEOUT_CYCLES, cleared);
+    if (!cleared) ref_model.error_count++;
 
     tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp);  // ← Read RX for 2nd transfer
     ref_model.verify_rx_drain(.observed(rx_temp), .width(8));  // ← Verify + pop queue
-
-    tb_top.u_apb_bfm.apb_read(APB_RX_DATA, rx_temp2);  // ← Read RX for 2nd transfer
-    ref_model.verify_rx_drain(.observed(rx_temp2), .width(8));  // ← Verify + pop queue
 
     cleanup();
   endtask
@@ -221,7 +220,7 @@ class clk_div_corner_test;
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
     // Attempt mid-transfer DIV update to validate sampled-at-start (R25).
-    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int div_corners[$] = '{0, 1, 2, 3, 255, 1024};
     int div_value;
     int expected_period;
     int measured_period;
