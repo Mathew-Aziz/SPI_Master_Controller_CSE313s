@@ -1,5 +1,5 @@
 // =============================================================================
-// error_injection_test.sv — Cleaned, Refactored & Fixed
+// error_injection_test.sv
 // -----------------------------------------------------------------------------
 // Requirements covered:
 //   R3  : EN=0 holds shifter/FIFOs; SCLK idle; SS_n forced high
@@ -23,9 +23,7 @@
 
 class error_injection_test;
 
-  // ---------------------------------------------------------------------------
-  // Localparam masks (eliminates magic numbers)
-  // ---------------------------------------------------------------------------
+  // Localparam masks 
   localparam bit [31:0] MASK_TX_OVF = 32'h0000_0020;
   localparam bit [31:0] MASK_RX_OVF = 32'h0000_0040;
   localparam bit [31:0] MASK_RX_FULL = 32'h0000_0008;
@@ -36,9 +34,7 @@ class error_injection_test;
   localparam bit [31:0] W1C_RX_OVF = 32'h0000_0008;
   localparam bit [31:0] W1C_ALL = 32'hFFFF_FFFF;
 
-  // ---------------------------------------------------------------------------
-  // Low-level APB helpers
-  // ---------------------------------------------------------------------------
+  // APB helpers
   static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
                                input bit [31:0] data);
     tb_top.u_apb_bfm.apb_write(addr, data);
@@ -53,9 +49,7 @@ class error_injection_test;
                         .pready(1'b1));
   endtask
 
-  // ---------------------------------------------------------------------------
-  // Composite helpers (eliminates repeated patterns)
-  // ---------------------------------------------------------------------------
+  // Composite helpers 
   static task automatic clear_int_stat(ref spi_coverage_col coverage);
     apb_wr(coverage, APB_INT_STAT, W1C_ALL);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
@@ -236,11 +230,7 @@ class error_injection_test;
 
   // ---------------------------------------------------------------------------
   // TC-R25: Illegal WIDTH encoding (2'b11) — DUT must not lock up
-  // ---------------------------------------------------------------------------
-  // The spec marks WIDTH=2'b11 as "undefined behavior" (Section 8.3).
-  // The DUT may interpret it as any width (8/16/32) or ignore it.
-  // This test verifies: (1) DUT doesn't crash, (2) transfer completes,
-  // (3) no X-propagation, (4) can return to valid width afterward.
+  // This test verifies: (1) DUT doesn't crash, (2) transfer completes, (3) no X-propagation, (4) can return to valid width afterward.
   // ---------------------------------------------------------------------------
   static task automatic tc_r25(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     bit [31:0] status;
@@ -307,12 +297,12 @@ class error_injection_test;
     ss_deassert(coverage);
   endtask
 
-  // ---------------------------------------------------------------------------
+  // =============================================================================
   // Main entry point
-  // ---------------------------------------------------------------------------
+  // =============================================================================
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
-    // ---- Setup --------------------------------------------------------------
+    // Setup 
     ref_model.apply_reset(.min_cycles(2));
 
     apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);
@@ -326,7 +316,7 @@ class error_injection_test;
     clear_int_stat(coverage);
     ss_deassert(coverage);
 
-    // ---- Execute all test cases ---------------------------------------------
+    // Execute all test cases 
     tc_r15(ref_model, coverage);  // RX empty read
     tc_r13(ref_model, coverage);  // TX overflow
     tc_r14(ref_model, coverage);  // RX overflow
@@ -335,7 +325,7 @@ class error_injection_test;
     tc_r25(ref_model, coverage);  // Illegal width
     tc_tx_rd(ref_model, coverage);  // TX_DATA read-zero
 
-    // ---- Cleanup ------------------------------------------------------------
+    // Cleanup 
     ss_deassert(coverage);
     apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
     irq_idle(coverage);
