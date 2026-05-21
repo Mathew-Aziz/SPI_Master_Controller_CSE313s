@@ -60,8 +60,8 @@ class error_injection_test;
     apb_wr(coverage, APB_INT_STAT, 32'hFFFF_FFFF);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    coverage.sample_ss(4'b0001, 4'b0000);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
 
     tb_top.bfm_mode      = 2'b00;
     tb_top.bfm_lsb_first = 1'b0;
@@ -69,13 +69,18 @@ class error_injection_test;
     tb_top.bfm_pattern   = 8'hA5;
     tb_top.bfm_miso_word = 32'hA5A5_A5A5;
 
+    // =========================================================================
     // TC-1: R15 — RX_DATA read while empty returns 0, no RX_OVF
+    // =========================================================================
+
     apb_rd(coverage, APB_RX_DATA, rd);
     apb_rd(coverage, APB_STATUS, status);
     ref_model.check_rx_empty_read_zero(rd, status);
     coverage.sample_overflow(.tx_ovf(1'b0), .rx_ovf(1'b0), .rx_empty_rd(1'b1));  // ← ADD THIS
 
     apb_rd(coverage, APB_INT_STAT, int_stat);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // ← MOVE HERE
+
     coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
                         .w1c_race_mask(5'b0));
     ref_model.check_int_stat_bit(int_stat, 3, 1'b0, "TC-1: RX_OVF set after empty read");
@@ -227,6 +232,8 @@ class error_injection_test;
     ref_model.check_int_stat_bit(int_stat, 3, 1'b1, "TC-5: RX_OVF not set");
 
     // NOW drain RX manually (8 valid + 1 empty = 9 reads)
+    // =========================================================================
+    // Drain the 8 valid RX words first
     for (i = 0; i < 8; i++) begin
       apb_rd(coverage, APB_RX_DATA, rd);
       if (rd === 32'h0) begin
@@ -234,20 +241,30 @@ class error_injection_test;
         ref_model.error_count++;
       end
     end
-    apb_rd(coverage, APB_RX_DATA, rd);  // 9th read — should return 0 (discarded)
+
+    // W1C clear RX_OVF (bit3) BEFORE the 9th empty read
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0008);
+    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b01000),
+                        .w1c_race_mask(5'b0));
+
+    // Wait for W1C to settle
+    @(posedge tb_top.PCLK);
+
+    // Verify clear worked
+    apb_rd(coverage, APB_INT_STAT, int_stat);
+    ref_model.check_int_stat_bit(int_stat, 3, 1'b0, "TC-5: INT_STAT[3] not cleared by W1C");
+
+    // NOW safe to do the 9th empty read - RX_OVF is 0
+    apb_rd(coverage, APB_RX_DATA, rd);  // should return 0, must NOT set RX_OVF
     if (rd !== 32'h0) begin
       $display("[SCOREBOARD_ERROR] TC-5: 9th RX read nonzero (should be discarded), rd=0x%08h", rd);
       ref_model.error_count++;
     end
 
-    // W1C clear RX_OVF (bit3)
-    apb_wr(coverage, APB_INT_STAT, 32'h0000_0008);
-    coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b01000),
-                        .w1c_race_mask(5'b0));
-
-    @(posedge tb_top.PCLK);
+    // Verify RX_OVF stayed 0 after empty read
+    repeat (1) @(posedge tb_top.PCLK);
     apb_rd(coverage, APB_INT_STAT, int_stat);
-    ref_model.check_int_stat_bit(int_stat, 3, 1'b0, "TC-5: INT_STAT[3] not cleared by W1C");
+    ref_model.check_int_stat_bit(int_stat, 3, 1'b0, "TC-5: empty RX read incorrectly set RX_OVF");
     // =========================================================================
     // TC-6: R16 — IRQ masked when INT_EN=0; INT_STAT still captures
     // =========================================================================
@@ -357,10 +374,23 @@ class error_injection_test;
     ref_model.check_tx_status(status, .expect_full(1'b0), .expect_empty(1'b1), .expect_busy(1'b0));
 
     begin
+
       logic sclk_val;
       sclk_val = tb_top.spi.sclk;
       if (sclk_val !== 1'b0) begin
         $display("[SCOREBOARD_ERROR] TC-8: SCLK not at CPOL idle when EN=0, SCLK=%b", sclk_val);
+        ref_model.error_count++;
+      end
+    end
+
+    // After verifying BUSY=0, TX_EMPTY=1, SCLK idle:
+    begin
+      logic [3:0] ss_n_val;
+      ss_n_val = tb_top.spi.ss_n;
+      if (ss_n_val !== 4'hF) begin
+        $display(
+            "[SCOREBOARD_ERROR] TC-8: SS_n not forced high when EN=0, SS_n=0x%0h (R3 violation)",
+            ss_n_val);
         ref_model.error_count++;
       end
     end
@@ -377,14 +407,11 @@ class error_injection_test;
     begin
       bit [31:0] reserved_rd;
 
-      apb_rd(coverage, 8'h24, reserved_rd);
-      ref_model.check_reserved_read_zero(8'h24, reserved_rd);
-
-      apb_rd(coverage, 8'h28, reserved_rd);
-      ref_model.check_reserved_read_zero(8'h28, reserved_rd);
-
-      apb_rd(coverage, 8'h2C, reserved_rd);
-      ref_model.check_reserved_read_zero(8'h2C, reserved_rd);
+      bit [ 7:0] reserved_addrs[3] = '{8'h24, 8'h28, 8'h2C};
+      foreach (reserved_addrs[i]) begin
+        apb_rd(coverage, reserved_addrs[i], reserved_rd);
+        ref_model.check_reserved_read_zero(reserved_addrs[i], reserved_rd);
+      end
 
       apb_wr(coverage, 8'h24, 32'hDEAD_BEEF);
       coverage.sample_reserved(8'h24, 1'b1);
