@@ -334,4 +334,4 @@ class error_injection_test;
   endtask
 endclass
 
-`endif  // ERROR_INJECTION_TEST_SV
+`endif\
