@@ -224,6 +224,22 @@ class delay_transfer_test;
       coverage.sample_ss(4'b0001, 4'b0000);
     end
 
+    // --- Directed Tests to achieve 100% coverage
+    // Sub-case A: d128_255, no_next_word
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd200);
+    coverage.sample_delay(.delay_val(8'd200), .queued(1'b0));
+    push_tx_word(tx_words[0], ref_model);
+
+    wait_for_busy_set(busy_set_result);
+    if (!busy_set_result) ref_model.error_count++;
+    wait_for_busy_clear(busy_clr_result, TIMEOUT_CYCLES);
+    if (!busy_clr_result) ref_model.error_count++;
+
+    drain_rx(1, ref_model);
+    cleanup(coverage);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
     // --- Phase 3: Mid-Transfer DELAY Update ---
     // Verifies that a DELAY write mid-transfer takes effect on the *next* inter-word gap.
     tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd0);
