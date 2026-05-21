@@ -124,6 +124,7 @@ class interrupt_test;
     // apb_wr(coverage, APB_TX_DATA, 32'hDEAD_BEEF);
     apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);
     tb_top.u_wrap.u_dut.u_regfile.tx_mem[tb_top.u_wrap.u_dut.u_regfile.tx_wp & 4'h7] = 32'hDEAD_BEEF;
+    
     apb_rd(coverage, APB_INT_STAT, rd);
     ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
     coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b00100),
