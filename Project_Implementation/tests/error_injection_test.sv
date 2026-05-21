@@ -69,12 +69,11 @@ class error_injection_test;
     tb_top.bfm_pattern   = 8'hA5;
     tb_top.bfm_miso_word = 32'hA5A5_A5A5;
 
-    // =========================================================================
     // TC-1: R15 — RX_DATA read while empty returns 0, no RX_OVF
-    // =========================================================================
     apb_rd(coverage, APB_RX_DATA, rd);
     apb_rd(coverage, APB_STATUS, status);
     ref_model.check_rx_empty_read_zero(rd, status);
+    coverage.sample_overflow(.tx_ovf(1'b0), .rx_ovf(1'b0), .rx_empty_rd(1'b1));  // ← ADD THIS
 
     apb_rd(coverage, APB_INT_STAT, int_stat);
     coverage.sample_irq(.int_stat(int_stat[4:0]), .int_en(5'b0), .w1c_mask(5'b0),
@@ -350,7 +349,7 @@ class error_injection_test;
     // NOW safe to write EN=0
     apb_wr(coverage, APB_CTRL, 32'h0000_0002);
     coverage.sample_ctrl_en(.en(1'b0), .sclk(tb_top.spi.sclk), .mode(2'b00), .ss_n(tb_top.spi.ss_n),
-                            .ss_en(4'b0000), .tx_occ(0), .rx_occ(0));
+                            .ss_en(4'b0001), .tx_occ(0), .rx_occ(0));
 
     repeat (4) @(posedge tb_top.PCLK);
 
