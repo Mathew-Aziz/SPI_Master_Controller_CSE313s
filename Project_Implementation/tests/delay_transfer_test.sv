@@ -132,7 +132,8 @@ class delay_transfer_test;
       @(posedge tb_top.PCLK);
       tb_top.u_apb_bfm.apb_read(APB_STATUS, status);
 
-      if ((status & 32'h1) == 32'h0) begin
+      // STATUS[0]=BUSY, STATUS[2]=TX_EMPTY (per apb_regfile status_word mapping)
+      if ((status & 32'h1) == 32'h0 && (status & 32'h4) == 32'h4) begin
         result = 1;
         return;
       end
@@ -224,6 +225,39 @@ class delay_transfer_test;
       coverage.sample_ss(4'b0001, 4'b0000);
     end
 
+    // --- Directed Tests to achieve 100% coverage
+    // Sub-case A: d128_255, no_next_word
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd200);
+    coverage.sample_delay(.delay_val(8'd200), .queued(1'b0));
+    push_tx_word(tx_words[0], ref_model);
+
+    wait_for_busy_set(busy_set_result);
+    if (!busy_set_result) ref_model.error_count++;
+    wait_for_busy_clear(busy_clr_result, TIMEOUT_CYCLES);
+    if (!busy_clr_result) ref_model.error_count++;
+
+    drain_rx(1, ref_model);
+    cleanup(coverage);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    // Sub-case B: d2_15, has_next_word
+    tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd8);
+    coverage.sample_delay(.delay_val(8'd8), .queued(1'b1));
+
+    foreach (tx_words[j]) push_tx_word(tx_words[j], ref_model);
+
+    wait_for_busy_set(busy_set_result);
+    if (!busy_set_result) ref_model.error_count++;
+
+    wait_for_busy_clear(busy_clr_result, TIMEOUT_CYCLES);
+    if (!busy_clr_result) ref_model.error_count++;
+
+    drain_rx(3, ref_model);
+    cleanup(coverage);
+    tb_top.u_apb_bfm.apb_write(APB_SS_CTRL, SS_EN0);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
     // --- Phase 3: Mid-Transfer DELAY Update ---
     // Verifies that a DELAY write mid-transfer takes effect on the *next* inter-word gap.
     tb_top.u_apb_bfm.apb_write(APB_DELAY, 8'd0);
@@ -249,7 +283,8 @@ class delay_transfer_test;
     push_tx_word(tx_words[1], ref_model);
     push_tx_word(tx_words[2], ref_model);
 
-    // First gap: cfg_delay=new_delay is live before S_FINISH fires for word0,
+    // First gap: DELAY register is live (not latched per-transfer), so new_delay
+    // takes effect immediately when S_FINISH evaluates cfg_delay for word 0.
     measure_idle_pclk(idle_result);
     get_div_value(div_val);
     check_idle_gap(.observed(idle_result), .expected((2 + new_delay) * (div_val + 1)),

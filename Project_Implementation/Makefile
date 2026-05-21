@@ -102,6 +102,23 @@ define REGRESS_ONE
 	:
 endef
 
+rerun_sim:
+	@echo "Closing current simulation..."
+	-echo "quit -sim" | vsim -c
+
+	@echo "Recompiling..."
+	$(MAKE) compile
+
+	@echo "Launching simulation..."
+	vsim -coverage work.tb_top \
+	     +TESTNAME=$(TEST) +UVM_TESTNAME=$(TEST) +SEED=$(SEED) \
+	     -do "do wave.do; run -all"
+
+run_wave: compile
+	vsim -coverage work.tb_top \
+	     +TESTNAME=$(TEST) +UVM_TESTNAME=$(TEST) +SEED=$(SEED) \
+	     -do "do wave.do; coverage save -onexit cov_$(TEST)_$(SEED).ucdb; run -all"
+
 regress: compile
 	@mkdir -p build
 	@$(foreach t,$(REGRESSION_TESTS),$(call REGRESS_ONE,$(t)) ;)
