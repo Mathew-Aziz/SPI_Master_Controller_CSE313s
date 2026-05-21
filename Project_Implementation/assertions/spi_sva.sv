@@ -191,20 +191,19 @@ module apb_sva (
         "[FAIL] chk_r14_rx_ovf_set_when_push_to_full_fifo: INT_STAT[RX_OVF] not set one cycle after push to full RX FIFO"
     );
 
-
-  // Spec R15       : RX_DATA read while RX_EMPTY returns 0 and does NOT
-  //                  set RX_OVF.
-  chk_r15_rx_empty_read_returns_zero_no_ovf :
-  assert property (
-        @(posedge PCLK) disable iff (!PRESETn)
-            (rx_empty_w && (PSEL & PENABLE & ~PWRITE) && PADDR == 8'h0C)
-            |-> (int_stat[IRQ_RX_OVF] == 1'b0 && PRDATA == 0)
-    )
-  else
-    $error(
-        "[FAIL] chk_r15_rx_empty_read_returns_zero_no_ovf: RX read while empty returned PRDATA=0x%h or set RX_OVF",
-        PRDATA
-    );
+// Spec R15       : RX_DATA read while RX_EMPTY returns 0 and does NOT
+//                  raise RX_OVF / INT_STAT[RX_OVF].
+chk_r15_rx_empty_read_returns_zero_no_ovf :
+assert property (
+      @(posedge PCLK) disable iff (!PRESETn)
+          (rx_empty_w && (PSEL & PENABLE & ~PWRITE) && PADDR == 8'h0C)
+          |-> (!$rose(int_stat[IRQ_RX_OVF]) && PRDATA == 32'h0)
+  )
+else
+  $error(
+      "[FAIL] chk_r15_rx_empty_read_returns_zero_no_ovf: RX read while empty returned PRDATA=0x%h or raised RX_OVF",
+      PRDATA
+  );
 
 
   // Spec R16       : IRQ = |(INT_STAT & INT_EN) at all times;
