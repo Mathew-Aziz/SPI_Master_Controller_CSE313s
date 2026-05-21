@@ -1,7 +1,6 @@
 `ifndef MODE_COVERAGE_TEST_SV
 `define MODE_COVERAGE_TEST_SV 
 
-
 class mode_coverage_test;
 
   static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
@@ -20,38 +19,37 @@ class mode_coverage_test;
 
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
 
-    bit [31:0] rd;
-    bit [31:0] tx_word;
-    bit [31:0] rx_word;
-    bit [31:0] expected_rx;
-    integer mode;
-    integer lsb_first;
-    bit [1:0] width_idx;
-    int width_bits;
-    integer timeout;
-    integer errors = 0;
-    bit [31:0] ctrl_val;
-    integer wait_count = 0;
+    bit [31:0] rd, tx_word, rx_word, expected_rx, ctrl_val;
+    integer mode, lsb_first, width_idx, width_bits, timeout;
 
+    $display("[INFO] mode_coverage_test: starting");
 
-    // Reset & Clock Setup
+    // ---- SETUP ----
     ref_model.apply_reset(.min_cycles(2));
 
-    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);  // DIV=4 for robust timing
+    apb_wr(coverage, APB_CLK_DIV, 32'h0000_0004);
     coverage.sample_clk_div(16'h0004);
 
-    // Default BFM init (will be overwritten per iteration)
+    apb_wr(coverage, APB_DELAY, 32'h0000_0000);
+
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    apb_wr(coverage, APB_INT_STAT, 32'hFFFF_FFFF);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
     tb_top.bfm_mode      = 2'b00;
     tb_top.bfm_pattern   = 8'hA5;
     tb_top.bfm_miso_word = 32'hA5A5_A5A5;
     tb_top.bfm_lsb_first = 1'b0;
     tb_top.bfm_width     = 2'b00;
 
+    // ---- MAIN LOOP: 4 modes x 2 orders x 3 widths = 24 combinations ----
     for (mode = 0; mode < 4; mode++) begin
       for (lsb_first = 0; lsb_first < 2; lsb_first++) begin
         for (width_idx = 0; width_idx < 3; width_idx++) begin
 
-          // Map width index to bit count
+          // Width in bits
           case (width_idx)
             0: width_bits = 8;
             1: width_bits = 16;
@@ -59,95 +57,101 @@ class mode_coverage_test;
             default: width_bits = 8;
           endcase
 
-          // Test patterns (asymmetric for bit-order detection)
+          // TX pattern and expected RX from BFM
           case (width_idx)
-            2'b00: begin
+            0: begin
               tx_word     = 32'h0000_0081;
               expected_rx = {24'h0, 8'hA5};
             end
-            2'b01: begin
+            1: begin
               tx_word     = 32'h0000_8001;
               expected_rx = {16'h0, 16'hA5A5};
             end
-            2'b10: begin
+            2: begin
               tx_word     = 32'h8000_0001;
               expected_rx = 32'hA5A5_A5A5;
             end
+            default: begin
+              tx_word     = 32'h0000_0081;
+              expected_rx = {24'h0, 8'hA5};
+            end
           endcase
 
-          // Configure BFM to match DUT
+          // Sync BFM
           tb_top.bfm_mode      = mode[1:0];
-          tb_top.bfm_lsb_first = lsb_first;
-          tb_top.bfm_width     = width_idx;
+          tb_top.bfm_lsb_first = lsb_first[0];
+          tb_top.bfm_width     = width_idx[1:0];
           tb_top.bfm_miso_word = expected_rx;
           tb_top.bfm_pattern   = expected_rx[7:0];
 
-          // Configure DUT CTRL
+          // Build CTRL value
           ctrl_val             = 32'h0;
-          ctrl_val[0]          = 1'b1;
-          ctrl_val[1]          = 1'b1;
-          ctrl_val[3:2]        = mode[1:0];
-          ctrl_val[4]          = lsb_first;
-          ctrl_val[7:6]        = width_idx;
-          ctrl_val[5]          = 1'b0;
+          ctrl_val[0]          = 1'b1;  // EN
+          ctrl_val[1]          = 1'b1;  // MSTR
+          ctrl_val[3:2]        = mode[1:0];  // MODE
+          ctrl_val[4]          = lsb_first[0];  // LSB_FIRST
+          ctrl_val[7:6]        = width_idx[1:0];  // WIDTH
+          ctrl_val[5]          = 1'b0;  // LOOPBACK off
 
           apb_wr(coverage, APB_CTRL, ctrl_val);
-
-          // Cover config (R4/R5/R6/R25)
-          coverage.sample_config(.mode(mode[1:0]), .lsb_first(lsb_first), .width(width_idx),
+          coverage.sample_config(.mode(mode[1:0]), .lsb_first(lsb_first[0]), .width(width_idx[1:0]),
                                  .loopback(1'b0));
 
           // Assert SS
           apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
           coverage.sample_ss(4'b0001, 4'b0000);
+          coverage.sample_busy(1'b1, width_idx[1:0]);
 
-          coverage.sample_busy(1'b1, width_idx);
-
-          // Predict expected RX
+          // Predict
           ref_model.predict_word(.tx_word(tx_word), .width_bits(width_bits), .loopback(1'b0),
                                  .miso_word(expected_rx));
 
-          // Drive stimulus
+          // Drive TX
           apb_wr(coverage, APB_TX_DATA, tx_word);
 
-          // Wait for transfer completion (bounded timeout)
+          // Timeout per width
           case (width_idx)
             0: timeout = 500;
             1: timeout = 1000;
             2: timeout = 2000;
+            default: timeout = 500;
           endcase
 
-          wait_count = 0;
-          repeat (timeout) begin
+          // Wait for BUSY=0
+          begin
+            int wc = 0;
             apb_rd(coverage, APB_STATUS, rd);
-            if (!rd[0]) break;
-            wait_count++;
+            while (rd[0] && wc < timeout) begin
+              apb_rd(coverage, APB_STATUS, rd);
+              wc++;
+            end
+            if (rd[0]) begin
+              ref_model.checker_error(
+                  "mode_coverage_test", $sformatf(
+                  "timeout mode=%0d lsb=%0d width=%0d", mode, lsb_first, width_idx));
+              apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+              coverage.sample_ss(4'b0000, 4'b0000);
+              coverage.sample_busy(1'b0, width_idx[1:0]);
+              continue;
+            end
           end
 
-          if (wait_count == timeout) begin
-            $display(
-                "[CHECKER_ERROR] mode_coverage_test: timeout waiting BUSY=0 (mode=%0d, width=%0d)",
-                mode, width_idx);
-            errors++;
-            ref_model.error_count++;
-            // ensure SS released even on timeout
-            apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
-            coverage.sample_ss(4'b0000, 4'b0000);
-            coverage.sample_busy(1'b0, width_idx);
-            continue;
-          end
-
-          // Verify RX
+          // Read and check RX
+          $display("[INFO] mode_coverage_test: checking mode=%0d lsb=%0d width=%0d", mode,
+                   lsb_first, width_bits);
           apb_rd(coverage, APB_RX_DATA, rx_word);
           ref_model.check_rx_word(rx_word);
 
-          // BUSY ended + SS cleanup
-          coverage.sample_busy(1'b0, width_idx);
+          // Cleanup
+          coverage.sample_busy(1'b0, width_idx[1:0]);
           apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
           coverage.sample_ss(4'b0000, 4'b0000);
+
         end
       end
     end
+
+    $display("[INFO] mode_coverage_test: finished, errors=%0d", ref_model.error_count);
 
   endtask
 endclass

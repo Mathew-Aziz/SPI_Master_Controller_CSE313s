@@ -117,10 +117,10 @@ class spi_ref_model;
     for (int i = 0; i < expected_queue.size(); i++) begin
       int fifo_idx = (tx_ptr_base + i) & 3'h7;  // wrap at 8
       bit [31:0] actual = tb_top.u_wrap.u_dut.u_regfile.tx_mem[fifo_idx];
-      
+
       if (actual !== expected_queue[i]) begin
-        $display("[SCOREBOARD_ERROR] Width[%0d] TX_FIFO[%d] (mem[%d]) = 0x%08h, expected 0x%08h", width, i, fifo_idx,
-                 actual, expected_queue[i]);
+        $display("[SCOREBOARD_ERROR] Width[%0d] TX_FIFO[%d] (mem[%d]) = 0x%08h, expected 0x%08h",
+                 width, i, fifo_idx, actual, expected_queue[i]);
         error_count++;
       end
     end
@@ -254,6 +254,40 @@ class spi_ref_model;
       error_count++;
     end
   endtask
+
+  task check_irq(input bit expected, input string msg);
+    bit actual;
+    actual = tb_top.u_wrap.u_dut.u_regfile.IRQ;
+    if (actual !== expected) begin
+      $display("[SCOREBOARD_ERROR] IRQ=%b expected=%b %s", actual, expected, msg);
+      error_count++;
+    end
+  endtask
+
+  task check_int_stat_bit(input bit [31:0] int_stat, input int bit_idx, input bit expected,
+                          input string msg);
+    if (int_stat[bit_idx] !== expected) begin
+      $display("[SCOREBOARD_ERROR] INT_STAT[%0d]=%b expected=%b %s INT_STAT=0x%08h", bit_idx,
+               int_stat[bit_idx], expected, msg, int_stat);
+      error_count++;
+    end
+  endtask
+
+  task wait_and_drain(input int max_wait = 5000, input int rx_words = 8);
+    bit [31:0] status, rd;
+    int wc = 0;
+    tb_top.u_apb_bfm.apb_read(8'h04, status);
+    while ((status[0] || !status[2]) && wc < max_wait) begin
+      tb_top.u_apb_bfm.apb_read(8'h04, status);
+      wc++;
+    end
+    if (status[0] || !status[2]) begin
+      $display("[SCOREBOARD_ERROR] wait_and_drain: timeout");
+      error_count++;
+    end
+    for (int i = 0; i < rx_words; i++) tb_top.u_apb_bfm.apb_read(8'h0C, rd);
+  endtask
+
 
   // ------------------------------------------------------------------
   // Reset helper: applies spec-compliant reset sequence
