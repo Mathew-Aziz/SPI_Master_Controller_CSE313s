@@ -251,109 +251,107 @@ class interrupt_test;
 
 
     //*======================TX_OVF IRQ test=========================
-    $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting");
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting at t=%0t", $time  );
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0004);  // Enable only TX_OVF
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0004);  // Enable only TX_OVF
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    // for (int i = 0; i < 12; i++) begin
-    //   val = $urandom() & 8'hFF;
-    //   apb_wr(coverage, APB_TX_DATA, val);
-    //   if (tb_top.spi.cb_mon.irq == 1'b1) break;
-    // end
-    // coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
+    for (int i = 0; i < 12; i++) begin
+      val = $urandom() & 8'hFF;
+      apb_wr(coverage, APB_TX_DATA, val);
+      if (tb_top.spi.cb_mon.irq == 1'b1) break;
+    end
+    coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
 
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00100), .w1c_mask(5'b0),
-    //                       .w1c_race_mask(5'b0));
-    // end
+    repeat (2) begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00100), .w1c_mask(5'b0),
+                          .w1c_race_mask(5'b0));
+    end
 
-    // if (tb_top.spi.cb_mon.irq != 1'b1)
-    //   ref_model.checker_error("Interrupt test",
-    //                           "TX_OVF IRQ not asserted when TX_OVF condition met");
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      ref_model.checker_error("Interrupt test",
+                              "TX_OVF IRQ not asserted when TX_OVF condition met");
 
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);  // W1C clear
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b00100),
-    //                     .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);  // W1C clear
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b00100),
+                        .w1c_race_mask(5'b0));
 
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0000);  // Mask TX_OVF
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0000);  // Mask TX_OVF
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    // // drain FIFO
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
+    // drain FIFO
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
 
-    // repeat (5000) begin
-    //     apb_rd(coverage, APB_STATUS, rd);
-    //     if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
+    repeat (5000) begin
+        apb_rd(coverage, APB_STATUS, rd);
+        if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
 
-    // // One final fresh read
-    // apb_rd(coverage, APB_STATUS, rd);
-    // coverage.sample_busy(1'b0, 2'b00);
+    // One final fresh read
+    apb_rd(coverage, APB_STATUS, rd);
+    coverage.sample_busy(1'b0, 2'b00);
 
-    // if (rd[0] != 1'b0 || rd[2] != 1'b1) begin
-    //   $display("[FIFO_STRESS_TEST TX] ERROR: transfer did not complete for width= bits (STATUS=0x%08h)",
-    //            rd);
-    // end 
+    if (rd[0] != 1'b0 || rd[2] != 1'b1) begin
+      $display("[FIFO_STRESS_TEST TX] ERROR: transfer did not complete for width= bits (STATUS=0x%08h)",
+               rd);
+    end 
 
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
-    // coverage.sample_ss(4'b0000, 4'b0000);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
+    coverage.sample_ss(4'b0000, 4'b0000);
 
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // for (int i = 0; i <= 8; i++) begin
-    //   val = $urandom() & 8'hFF;
-    //   apb_wr(coverage, APB_TX_DATA, val);
-    //   if (tb_top.spi.cb_mon.irq == 1'b1) begin
-    //     ref_model.checker_error("Interrupt test", "TX_OVF IRQ is asserted despite being masked");
-    //     break;
-    //   end
-    // end
+    //?W1C Race (deterministic): backdoor-clear then trigger TX push
 
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
-    // end
+    for (int i = 0; i <= 8; i++) begin
+      val = $urandom() & 8'hFF;
+      apb_wr(coverage, APB_TX_DATA, 32'(i));
+      if (tb_top.spi.cb_mon.irq == 1'b1) begin
+        ref_model.checker_error("Interrupt test", "TX_OVF IRQ is asserted despite being masked");
+        break;
+      end
+    end
 
-    // W1C Race (deterministic): backdoor-clear then trigger TX push
-    
-    // // tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00100;
-    // // apb_wr(coverage, APB_TX_DATA, 32'hDEAD_BEEF);
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);
-    // tb_top.u_wrap.u_dut.u_regfile.tx_mem[tb_top.u_wrap.u_dut.u_regfile.tx_wp & 4'h7] = 32'hDEAD_BEEF;
-    
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
-    // coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b00100),
-    //                     .w1c_race_mask(5'b00100));
+    repeat (2) begin
+    apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0100, rd, 8'b0000_0100);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    end
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
 
-    // // drain FIFO
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // assert SS_n[0] LOW
-    //   coverage.sample_ss(4'b0001, 4'b0000);
+    fork
+    // Thread A: force tx_push_valid=1 on posedge N (2 cycles from now)
+    begin
+        repeat (2) @(posedge tb_top.PCLK);  // arrive at posedge N
+        force tb_top.u_wrap.u_dut.u_regfile.tx_push_valid = 1'b1;
+        @(posedge tb_top.PCLK);             // hold for one cycle
+        release tb_top.u_wrap.u_dut.u_regfile.tx_push_valid;
+    end
+    // Thread B: apb_write W1C — @cb_master(+0), SETUP(+1), ACCESS(+2=N)
+    begin
+        apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);  // W1C bit 2, ACCESS=N
+    end
+    join
+ 
+    check_race(coverage, ref_model, "TX_OVF (back-to-back)", 2);
 
-    // repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
+    // drain TX so next sub-tests start clean
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+    apb_wr(coverage, APB_SS_CTRL,  32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
 
-    // // One final fresh read
-    // apb_rd(coverage, APB_STATUS, rd);
-    // coverage.sample_busy(1'b0, 2'b00);
 
-    // if (rd[0] != 1'b0 || rd[2] != 1'b1) begin
-    //   $display("[FIFO_STRESS_TEST TX] ERROR: transfer did not complete for width= 8bits (STATUS=0x%08h)",
-    //              rd);
-    // end
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
-    // coverage.sample_ss(4'b0000, 4'b0000);
     // //================== RX_FULL IRQ test ====================
 
     // $display("[INTERRUPT_TEST] Starting RX_FULL IRQ test");
