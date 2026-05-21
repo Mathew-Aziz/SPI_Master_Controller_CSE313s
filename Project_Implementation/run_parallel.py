@@ -34,7 +34,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Defaults (mirror the Makefile)
 # ---------------------------------------------------------------------------
-DEFAULT_SEEDS = list(range(1, 9))           # seeds 1-8  (REGRESSION_SEEDS = 8)
+DEFAULT_SEEDS = list(range(1, 11))          # seeds 1-10
 MAX_WORKERS   = 10                           # 10 parallel jobs
 BUILD_DIR     = Path("build")
 
@@ -258,9 +258,49 @@ def main() -> int:
             results.append(result)
 
     wall = time.monotonic() - start
-    print(f"\n  Wall-clock time: {wall:.1f}s")
+
+    # ---------- timing summary ----------
+    wall_h  = int(wall) // 3600
+    wall_m  = (int(wall) % 3600) // 60
+    wall_s  = wall % 60
+    sim_total = sum(r.elapsed for r in results)   # sequential equivalent
+
+    print(f"\n  ⏱  Started  : {datetime.fromtimestamp(start + time.time() - time.monotonic()).strftime('%H:%M:%S')}")
+    print(f"  ⏱  Finished : {datetime.now().strftime('%H:%M:%S')}")
+    if wall_h:
+        print(f"  ⏱  Duration : {wall_h}h {wall_m}m {wall_s:.1f}s")
+    elif wall_m:
+        print(f"  ⏱  Duration : {wall_m}m {wall_s:.1f}s")
+    else:
+        print(f"  ⏱  Duration : {wall_s:.1f}s")
+    print(f"  ⏱  Speedup  : {sim_total/wall:.1f}x  (would have taken {sim_total:.0f}s sequentially)")
 
     failures = print_summary(results)
+
+    # ---------- coverage ----------
+    print("\n▶  Merging coverage databases ...")
+    ucdb_files = list(Path(".").glob("*.ucdb"))
+    if not ucdb_files:
+        print("  ⚠  No .ucdb files found - skipping coverage.", file=sys.stderr)
+    else:
+        merge = subprocess.run(
+            ["vcover", "merge", "-out", "build/merged.ucdb"] + [str(f) for f in ucdb_files],
+            capture_output=False,
+        )
+        if merge.returncode != 0:
+            print("✗  Coverage merge failed.", file=sys.stderr)
+        else:
+            print("▶  Generating coverage report ...")
+            with open("coverage_report.txt", "w") as rpt:
+                cov = subprocess.run(
+                    ["vcover", "report", "-details", "build/merged.ucdb"],
+                    stdout=rpt,
+                    stderr=subprocess.STDOUT,
+                )
+            if cov.returncode == 0:
+                print("✔  Coverage report saved to: coverage_report.txt")
+            else:
+                print("✗  Coverage report generation failed.", file=sys.stderr)
 
     # Exit 0 if all passed, 1 otherwise (useful for CI)
     return 0 if failures == 0 else 1
