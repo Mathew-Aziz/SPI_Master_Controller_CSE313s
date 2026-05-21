@@ -67,6 +67,31 @@ class reg_access_test;
     ref_model.check_reg("DELAY", 32'h0, rd);
     coverage.sample_reset(APB_DELAY, (rd == 32'h0));
 
+    // ---------------- Extra: cover SS_EN patterns for cg_ss ----------------
+    // Hit: none, ss0_only, ss1_only, ss2_only, ss3_only, multiple
+    // Keep SS_VAL=0 for simplicity; cg_ss.cp_ss_en only cares about SS_EN.
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // none
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);  // ss0_only
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0002);  // ss1_only
+    coverage.sample_ss(4'b0010, 4'b0000);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0004);  // ss2_only
+    coverage.sample_ss(4'b0100, 4'b0000);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0008);  // ss3_only
+    coverage.sample_ss(4'b1000, 4'b0000);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0003);  // multiple (example: ss0+ss1)
+    coverage.sample_ss(4'b0011, 4'b0000);
+
+    // Restore to none so later steps start from deasserted SS
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
     // ---------------- TP-REG-02: RW readback ----------------
     apb_wr(coverage, APB_CTRL, rd_small);
     apb_rd(coverage, APB_CTRL, rd);
