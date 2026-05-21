@@ -151,7 +151,7 @@ class interrupt_test;
     // =======================================================================
     // Sub-test: TRANSFER_DONE (bit 4)
     // =======================================================================
-    $display("[INTERRUPT_TEST] Starting TRANSFER_DONE IRQ test");
+    // $display("[INTERRUPT_TEST] Starting TRANSFER_DONE IRQ test");
 
     // --- 4a. Enabled + unmasked: IRQ must fire ---
     // Safe clear: quiesce before every baseline W1C write so that
@@ -466,6 +466,8 @@ class interrupt_test;
     //                       cp_rx_full_masked, cp_rx_ovf_masked, cp_int_en
     // =======================================================================
 
+    $display("[INTERRUPT_TEST] Starting RX_FULL and RX_OVF IRQ test at time %0t", $time);
+
     // 1. Ensure RX FIFO is empty (drain it)
     do begin
       apb_rd(coverage, APB_STATUS, rd);
@@ -473,9 +475,9 @@ class interrupt_test;
     end while (rd[4] == 1'b0);
 
     // 2. Mask all interrupts so RX_FULL fires while INT_EN[1]=0
-    apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0002);
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00010), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
     // 3. Configure DUT
     apb_wr(coverage, APB_CTRL, 32'h0000_0003);  // EN=1, MSTR=1, mode0, 8-bit
@@ -484,8 +486,8 @@ class interrupt_test;
     // 4. Run exactly 8 transfers WITHOUT reading RX_DATA.
     //    Each transfer pushes one byte into the RX FIFO.
     //    The 8th push fills the FIFO → sets INT_STAT[RX_FULL].
-    repeat (8) begin
-      apb_wr(coverage, APB_TX_DATA, 32'h0000_00AA);
+    for (int i = 0; i< 8 ; i++) begin
+      apb_wr(coverage, APB_TX_DATA, 32'(i));
       apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
       coverage.sample_ss(4'b0001, 4'b0000);
       do apb_rd(coverage, APB_STATUS, rd); while (rd[0]);
@@ -495,7 +497,35 @@ class interrupt_test;
 
     // 5. Read INT_STAT — closes cp_rx_full_irq and cp_rx_full_masked
     apb_rd(coverage, APB_INT_STAT, rd);
-    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00000));
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010));
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      ref_model.checker_error("Interrupt test", "RX_FULL IRQ not asserted when RX_FULL condition met");
+
+    //W1C test
+    apb_rd(coverage, APB_RX_DATA, rd);
+
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0002);
+    coverage.sample_irq(.int_stat(5'b0010), .int_en(5'b00010), .w1c_mask(5'b00010),
+                        .w1c_race_mask(5'b0));
+    apb_rd(coverage, APB_INT_STAT, rd);
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010));
+    if(rd[1] == 1'b1)
+      ref_model.checker_error("Interrupt test", "RX_FULL INT_STAT bit not cleared after W1C");
+
+    //W1C Race
+    apb_wr(coverage, APB_TX_DATA, 32'h0000_00CC);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    repeat(32) @(posedge tb_top.PCLK);  // wait for any pulses to settle
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0002);
+    coverage.sample_irq(.int_stat(5'b0010), .int_en(5'b00010), .w1c_mask(5'b00010),
+                        .w1c_race_mask(5'b0));
+    check_race(coverage, ref_model, "RX_FULL", 1);
+    do apb_rd(coverage, APB_STATUS, rd); while (rd[0]);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
 
     // 6. RX FIFO is now full. One more transfer → 9th push is dropped
     //    → sets INT_STAT[RX_OVF].
@@ -506,9 +536,14 @@ class interrupt_test;
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
     coverage.sample_ss(4'b0000, 4'b0000);
 
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0008);
+
     // 7. Sample again — closes cp_rx_ovf_irq and cp_rx_ovf_masked
     apb_rd(coverage, APB_INT_STAT, rd);
-    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00000));
+    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b01000));
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      ref_model.checker_error("Interrupt test", "RX_OVF IRQ not asserted when RX_OVF condition met");
+
 
     // 8. Enable all interrupts then sample — closes cp_int_en all_on
     apb_wr(coverage, APB_INT_EN, 32'h0000_001F);
