@@ -11,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Defaults (mirror the Makefile)
 # ---------------------------------------------------------------------------
-DEFAULT_SEEDS = list(range(1, 11))          # seeds 1..10
+DEFAULT_SEEDS = list(range(1, 11))          # seeds 1-10
 MAX_WORKERS   = 10                           # 10 parallel jobs
 BUILD_DIR     = Path("build")
 
@@ -122,6 +122,40 @@ def _detect_pass(log: str, returncode: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Error extractor
+# ---------------------------------------------------------------------------
+def _extract_errors(log_path: Path) -> list[str]:
+    """
+    Scan the log file and return the most relevant error/failure lines
+    (up to 5 lines) to give a quick reason for failure.
+    """
+    keywords = [
+        "** error",
+        "** fatal",
+        "assertion failed",
+        "test failed",
+        "simulation failed",
+        "uvm_fatal",
+        "uvm_error",
+        "traceback",
+        "error:",
+    ]
+    matches = []
+    try:
+        lines = log_path.read_text(errors="replace").splitlines()
+        for line in lines:
+            if any(kw in line.lower() for kw in keywords):
+                stripped = line.strip()
+                if stripped and stripped not in matches:
+                    matches.append(stripped)
+            if len(matches) >= 5:
+                break
+    except FileNotFoundError:
+        matches.append("Log file not found")
+    return matches
+
+
+# ---------------------------------------------------------------------------
 # Pretty summary
 # ---------------------------------------------------------------------------
 def print_summary(results: list[Result]) -> int:
@@ -151,10 +185,17 @@ def print_summary(results: list[Result]) -> int:
     print("=" * len(header) + "\n")
 
     if failed:
-        print("Failed runs:")
+        print("Failed runs:\n")
         for r in failed:
             print(f"  • {r.job.test}  seed={r.job.seed}  →  {r.job.log}")
-        print()
+            # Extract relevant error lines from the log
+            error_lines = _extract_errors(r.job.log)
+            if error_lines:
+                for line in error_lines:
+                    print(f"      ↳ {line}")
+            else:
+                print(f"      ↳ No specific error found - check log manually")
+            print()
 
     return len(failed)
 
@@ -184,6 +225,10 @@ def parse_args() -> argparse.Namespace:
         help="Run 'make compile' before launching jobs",
     )
     p.add_argument(
+        "--compile-only", action="store_true",
+        help="Run 'make compile' and exit without running any tests",
+    )
+    p.add_argument(
         "--makefile-dir", type=Path, default=Path("."),
         metavar="DIR",
         help="Directory containing the Makefile (default: current dir)",
@@ -198,6 +243,9 @@ def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
     # Optional compile step
+    if args.compile_only:
+        return 0 if compile_project(makefile_dir) else 1
+
     if args.compile:
         if not compile_project(makefile_dir):
             return 1
@@ -209,7 +257,7 @@ def main() -> int:
 
     print(
         f"▶  Launching {total} job(s)  "
-        f"({len(args.tests)} test(s) × {len(args.seeds)} seed(s))  "
+        f"({len(args.tests)} test(s) x {len(args.seeds)} seed(s))  "
         f"with {workers} parallel worker(s)"
     )
     print(f"   Seeds  : {args.seeds}")
@@ -258,7 +306,7 @@ def main() -> int:
     print("\n▶  Merging coverage databases ...")
     ucdb_files = list(Path(".").glob("*.ucdb"))
     if not ucdb_files:
-        print("  ⚠  No .ucdb files found - skipping coverage.", file=sys.stderr)
+        print("  ⚠  No .ucdb files found – skipping coverage.", file=sys.stderr)
     else:
         merge = subprocess.run(
             ["vcover", "merge", "-out", "build/merged.ucdb"] + [str(f) for f in ucdb_files],

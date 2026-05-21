@@ -24,15 +24,15 @@
 class error_injection_test;
 
   // // Localparam masks 
-  // localparam bit [31:0] MASK_TX_OVF = 32'h0000_0020;
-  // localparam bit [31:0] MASK_RX_OVF = 32'h0000_0040;
-  // localparam bit [31:0] MASK_RX_FULL = 32'h0000_0008;
-  // localparam bit [31:0] MASK_TX_FULL = 32'h0000_0002;
-  // localparam bit [31:0] MASK_TX_EMPTY = 32'h0000_0004;
-  // localparam bit [31:0] MASK_BUSY = 32'h0000_0001;
-  // localparam bit [31:0] W1C_TX_OVF = 32'h0000_0004;
-  // localparam bit [31:0] W1C_RX_OVF = 32'h0000_0008;
-  // localparam bit [31:0] W1C_ALL = 32'hFFFF_FFFF;
+  localparam bit [31:0] MASK_TX_OVF = 32'h0000_0020;
+  localparam bit [31:0] MASK_RX_OVF = 32'h0000_0040;
+  localparam bit [31:0] MASK_RX_FULL = 32'h0000_0008;
+  localparam bit [31:0] MASK_TX_FULL = 32'h0000_0002;
+  localparam bit [31:0] MASK_TX_EMPTY = 32'h0000_0004;
+  localparam bit [31:0] MASK_BUSY = 32'h0000_0001;
+  localparam bit [31:0] W1C_TX_OVF = 32'h0000_0004;
+  localparam bit [31:0] W1C_RX_OVF = 32'h0000_0008;
+  localparam bit [31:0] W1C_ALL = 32'hFFFF_FFFF;
 
   // APB helpers
   static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
@@ -334,4 +334,4 @@ class error_injection_test;
   endtask
 endclass
 
-`endif\
+`endif
