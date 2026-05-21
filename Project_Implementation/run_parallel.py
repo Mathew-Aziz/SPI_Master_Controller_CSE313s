@@ -1,26 +1,3 @@
-#!/usr/bin/env python3
-"""
-run_parallel.py – Parallel regression runner for the SPI Master Verification Project.
-
-Runs every (test, seed) combination using Questa (vsim), with up to MAX_WORKERS
-jobs running simultaneously.  Logs are saved to build/ and a summary table is
-printed at the end.
-
-Usage examples
---------------
-# Use seeds 1-8 (matching Makefile default) with 10 parallel workers:
-    python run_parallel.py
-
-# Custom seeds and worker count:
-    python run_parallel.py --seeds 1 2 3 42 99 --workers 6
-
-# Run only specific tests:
-    python run_parallel.py --tests sanity_test fifo_stress_test --seeds 1 2 3
-
-# Compile first, then run (default behaviour):
-    python run_parallel.py --compile
-"""
-
 import argparse
 import os
 import subprocess
@@ -34,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Defaults (mirror the Makefile)
 # ---------------------------------------------------------------------------
-DEFAULT_SEEDS = list(range(1, 11))          # seeds 1-10
+DEFAULT_SEEDS = list(range(1, 11))          # seeds 1..10
 MAX_WORKERS   = 10                           # 10 parallel jobs
 BUILD_DIR     = Path("build")
 
