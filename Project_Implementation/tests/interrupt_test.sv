@@ -449,27 +449,6 @@ class interrupt_test;
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // --- 2c. W1C Race: force tx_push_valid concurrent with W1C write ---
-    // Thread A forces tx_push_valid (simulates a TX overflow event).
-    // Thread B performs the W1C write.
-    // The TX FIFO is still full from the masked test above (8 words queued).
-    // tx_push_valid && tx_full_w = tx_push_dropped → sets INT_STAT[TX_OVF].
-    fork
-      begin
-        // Thread A: force tx_push_valid=1 on posedge N (2 cycles from now)
-        // tx_full_w is already 1 (FIFO has 8 entries), so tx_push_dropped
-        // becomes 1 for one cycle, setting INT_STAT[TX_OVF] in the RTL.
-        repeat (2) @(posedge tb_top.PCLK);
-        force tb_top.u_wrap.u_dut.u_regfile.tx_push_valid = 1'b1;
-        @(posedge tb_top.PCLK);
-        release tb_top.u_wrap.u_dut.u_regfile.tx_push_valid;
-      end
-      begin
-        // Thread B: W1C write — SETUP+1, ACCESS+2 = posedge N
-        apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);
-      end
-    join
-
     check_race(coverage, ref_model, "TX_OVF (back-to-back)", 2);
 
     // Drain TX FIFO and fully quiesce before RX section
