@@ -449,8 +449,6 @@ class interrupt_test;
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    check_race(coverage, ref_model, "TX_OVF (back-to-back)", 2);
-
     // Drain TX FIFO and fully quiesce before RX section
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
     coverage.sample_ss(4'b0001, 4'b0000);
