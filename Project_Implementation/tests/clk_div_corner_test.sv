@@ -33,7 +33,7 @@ localparam int CLK_DIV_SS_DISABLE = 32'h0000_0000;
 
 class rand_div_generator;
   rand int div_val;
-  constraint range_c {div_val inside {[1025 : 4096]};}
+  constraint range_c {div_val inside {[0 : 65535]};}  // Random bit over the full range
 endclass
 
 class clk_div_corner_test;
@@ -229,7 +229,7 @@ class clk_div_corner_test;
   static task run(ref spi_ref_model ref_model, ref spi_coverage_col coverage);
     // Program DIV=0,1, small, large(>=1024) and measure SCLK period in PCLK cycles (R8,R24).
     // Attempt mid-transfer DIV update to validate sampled-at-start (R25).
-    int div_corners[$] = '{0, 1, 2, 3, 255, 1024, 65535};
+    int div_corners[$] = '{0, 1, 2, 3, 255, 512, 1024, 65535};
     int div_value;
     int expected_period;
     int measured_period;
