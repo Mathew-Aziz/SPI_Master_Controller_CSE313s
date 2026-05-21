@@ -64,96 +64,194 @@ class interrupt_test;
 
     //*======================TRANSFER_DONE IRQ test=========================
 
-    // $display("[INTERRUPT_TEST] Starting TRANSFER_DONE IRQ test");
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    $display("[INTERRUPT_TEST] Starting TRANSFER_DONE IRQ test");
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0010);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0010);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    // val  = $urandom() & 8'hFF;
-    // apb_wr(coverage, APB_TX_DATA, val);
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
+    val  = $urandom() & 8'hFF;
+    apb_wr(coverage, APB_TX_DATA, val);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
 
-    // repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
-    // coverage.sample_busy(1'b0, 2'b00);
+    repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+    coverage.sample_busy(1'b0, 2'b00);
 
-    // if (tb_top.spi.cb_mon.irq != 1'b1)
-    //   ref_model.checker_error("Interrupt test",
-    //                           "TRANSFER_DONE IRQ not asserted after transfer completion");
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      ref_model.checker_error("Interrupt test",
+                              "TRANSFER_DONE IRQ not asserted after transfer completion");
 
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE", 8'b0001_0000, rd, 8'b0001_0000);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b10000), .w1c_mask(5'b0),
-    //                       .w1c_race_mask(5'b0));
-    // end
+    repeat (2) begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE", 8'b0001_0000, rd, 8'b0001_0000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b10000), .w1c_mask(5'b0),
+                          .w1c_race_mask(5'b0));
+    end
 
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b10000),
-    //                     .w1c_race_mask(5'b0));
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // if(rd[4] == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TRANSFER_DONE INT_STAT bit not cleared after W1C");
-    // if (tb_top.spi.cb_mon.irq == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted after W1C clear");
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b10000),
+                        .w1c_race_mask(5'b0));
+    apb_rd(coverage, APB_INT_STAT, rd);
+    if(rd[4] == 1'b1)
+      ref_model.checker_error("Interrupt test", "TRANSFER_DONE INT_STAT bit not cleared after W1C");
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted after W1C clear");
 
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // apb_wr(coverage, APB_TX_DATA, val);
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
+    apb_wr(coverage, APB_TX_DATA, val);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
 
-    // repeat (5000) begin
-    //     apb_rd(coverage, APB_STATUS, rd);
-    //     if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
+    repeat (5000) begin
+        apb_rd(coverage, APB_STATUS, rd);
+        if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
 
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
-    // coverage.sample_ss(4'b0000, 4'b0000);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
+    coverage.sample_ss(4'b0000, 4'b0000);
 
 
-    // if (tb_top.spi.cb_mon.irq == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted despite being masked");
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted despite being masked");
 
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE_masked", 8'b0001_0000, rd, 8'b0001_0000);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
-    // end
+    repeat (2) begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT_TRANSFER_DONE_masked", 8'b0001_0000, rd, 8'b0001_0000);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    end
 
-    // // W1C Race (deterministic): backdoor-clear then trigger transfer
+    // W1C Race (deterministic): backdoor-clear then trigger transfer
 
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);   // clear all stale bits
-    // apb_wr(coverage, APB_TX_DATA,  32'h0000_00AA);   // word 1
-    // apb_wr(coverage, APB_TX_DATA,  32'h0000_0055);   // word 2 — keeps BUSY=1 after word 1
-    // apb_wr(coverage, APB_SS_CTRL,  32'h0000_0001);   // N: SS asserted, transfer starts at N+1
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);   // clear all stale bits
+    apb_wr(coverage, APB_TX_DATA,  32'h0000_00AA);   // word 1
+    apb_wr(coverage, APB_TX_DATA,  32'h0000_0055);   // word 2 — keeps BUSY=1 after word 1
+    apb_wr(coverage, APB_SS_CTRL,  32'h0000_0001);   // N: SS asserted, transfer starts at N+1
  
-    // repeat (80) @(posedge tb_top.PCLK);              // advance to N+79
+    repeat (80) @(posedge tb_top.PCLK);              // advance to N+79
  
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_0010);   // ACCESS lands at N+81 = transfer_done_pulse
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0010);   // ACCESS lands at N+81 = transfer_done_pulse
  
-    // check_race(coverage, ref_model, "TRANSFER_DONE", 4);
+    check_race(coverage, ref_model, "TRANSFER_DONE", 4);
  
-    // // drain word 2 before next sub-test
-    // repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
-    // apb_wr(coverage, APB_SS_CTRL,  32'h0000_0000);
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    // drain word 2 before next sub-test
+    repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+    apb_wr(coverage, APB_SS_CTRL,  32'h0000_0000);
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     
+    
+    //*==================TX_EMPTY IRQ test=============================
 
-    // //*======================TX_OVF IRQ test=========================
-    // $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting");
+    $display("[INTERRUPT_TEST] Starting TX_EMPTY IRQ test");
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
+
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0001);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    val = $urandom() & 8'hFF;
+    apb_wr(coverage, APB_TX_DATA, val);
+    apb_rd(coverage, APB_INT_STAT, rd);
+    ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+    repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+
+    if (tb_top.spi.cb_mon.irq != 1'b1)
+      ref_model.checker_error("Interrupt test",
+                              "TX_EMPTY IRQ not asserted when TX_EMPTY condition met");
+
+    repeat (2) begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00001), .w1c_mask(5'b0),
+                          .w1c_race_mask(5'b0));
+    end
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b11111),
+                        .w1c_race_mask(5'b0));
+    apb_rd(coverage, APB_INT_STAT, rd);
+    if(rd[0] == 1'b1)
+      ref_model.checker_error("Interrupt test", "TX_EMPTY INT_STAT bit not cleared after W1C");
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted after W1C clear");
+
+    apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
+    coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+
+    val = $urandom() & 8'hFF;
+    apb_wr(coverage, APB_TX_DATA, val);
+    apb_rd(coverage, APB_INT_STAT, rd);
+    ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
+
+     repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+    if (tb_top.spi.cb_mon.irq == 1'b1)
+      ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted despite being masked");
+
+    repeat (2) begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
+    end
+
+    // W1C Race (deterministic): backdoor-clear then trigger TX push
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);   // clear all stale bits
+    apb_wr(coverage, APB_TX_DATA,  32'h0000_00AA);   // word 1
+    apb_wr(coverage, APB_TX_DATA,  32'h0000_0055);   // word 2 — keeps BUSY=1 after word 1
+    apb_wr(coverage, APB_SS_CTRL,  32'h0000_0001);   // N: SS asserted, transfer starts at N+1
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0002); 
+    repeat (78) begin
+      @(posedge tb_top.PCLK);
+    end             
+ 
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0001);   // ACCESS lands at N+81 = TX_EMPTY
+ 
+    check_race(coverage, ref_model, "TX_EMPTY", 0);
+ 
+    // drain word 2 before next sub-test
+    repeat (5000) begin
+      apb_rd(coverage, APB_STATUS, rd);
+      if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
+    end
+    apb_wr(coverage, APB_SS_CTRL,  32'h0000_0000);
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
+
+    repeat(3) @(posedge tb_top.PCLK);  // ensure clean separation between sub-tests in waveform
+
+
+    //*======================TX_OVF IRQ test=========================
+    $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting");
     // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);  // Clear all IRQs
     // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
@@ -224,7 +322,7 @@ class interrupt_test;
     //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     // end
 
-    // // W1C Race (deterministic): backdoor-clear then trigger TX push
+    // W1C Race (deterministic): backdoor-clear then trigger TX push
     
     // // tb_top.u_wrap.u_dut.u_regfile.int_stat = tb_top.u_wrap.u_dut.u_regfile.int_stat & ~5'b00100;
     // // apb_wr(coverage, APB_TX_DATA, 32'hDEAD_BEEF);
@@ -256,100 +354,6 @@ class interrupt_test;
 
     // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);  // deassert SS_n[0] HIGH
     // coverage.sample_ss(4'b0000, 4'b0000);
-
-    // //==================TX_EMPTY IRQ test=============================
-
-    // $display("[INTERRUPT_TEST] Starting TX_EMPTY IRQ test");
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
-
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0001);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
-
-    // val = $urandom() & 8'hFF;
-    // apb_wr(coverage, APB_TX_DATA, val);
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
-
-    // repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
-
-    // if (tb_top.spi.cb_mon.irq != 1'b1)
-    //   ref_model.checker_error("Interrupt test",
-    //                           "TX_EMPTY IRQ not asserted when TX_EMPTY condition met");
-
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00001), .w1c_mask(5'b0),
-    //                       .w1c_race_mask(5'b0));
-    // end
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
-    // coverage.sample_ss(4'b0000, 4'b0000);
-
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b11111),
-    //                     .w1c_race_mask(5'b0));
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // if(rd[0] == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TX_EMPTY INT_STAT bit not cleared after W1C");
-    // if (tb_top.spi.cb_mon.irq == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted after W1C clear");
-
-    // apb_wr(coverage, APB_INT_EN, 32'h0000_0000);
-    // coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
-
-    // val = $urandom() & 8'hFF;
-    // apb_wr(coverage, APB_TX_DATA, val);
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // ref_model.check_reg_masked("INT_STAT", 8'b0000_0000, rd, 8'b0000_0001);
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
-
-    //  repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
-    // coverage.sample_ss(4'b0000, 4'b0000);
-
-    // if (tb_top.spi.cb_mon.irq == 1'b1)
-    //   ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted despite being masked");
-
-    // repeat (2) begin
-    //   apb_rd(coverage, APB_INT_STAT, rd);
-    //   ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
-    //   coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
-    // end
-
-    // // W1C Race (deterministic): backdoor-clear then trigger TX push
-    // apb_wr(coverage, APB_TX_DATA, 32'hDEAD_BEEF);
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
-    // coverage.sample_ss(4'b0001, 4'b0000);
-    // apb_wr(coverage, APB_INT_STAT, 32'h0000_0001);
-
-    // apb_rd(coverage, APB_INT_STAT, rd);
-    // ref_model.check_reg_masked("INT_STAT", 8'b0000_0001, rd, 8'b0000_0001);
-    // coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b00001),
-    //                     .w1c_race_mask(5'b00001));
-
-    //  repeat (5000) begin
-    //   apb_rd(coverage, APB_STATUS, rd);
-    //   if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
-    // end
-
-    // apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
-    // coverage.sample_ss(4'b0000, 4'b0000);
-
     // //================== RX_FULL IRQ test ====================
 
     // $display("[INTERRUPT_TEST] Starting RX_FULL IRQ test");
