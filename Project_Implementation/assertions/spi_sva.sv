@@ -223,86 +223,25 @@ module apb_sva (
 
   // INT_STAT_W1C_NORMAL
   // Spec R17 : W1C baseline — on an APB write to 0x1C with no simultaneous
-  //   INT_STAT_W1C_NORMAL :
-  //   assert property (
-  //     @(posedge PCLK) disable iff (!PRESETn)
-  //     (  (PSEL & PENABLE & PWRITE)
-  //      && (PADDR == 8'h1C)
-  //      && !($rose(
-  //       transfer_done_pulse
-  //   )) && !($rose(
-  //       rx_push_valid
-  //   )) && !($rose(
-  //       tx_pop
-  //   ))) |=> (int_stat == ($past(
-  //       int_stat
-  //   ) & ~$past(
-  //       PWDATA[4:0]
-  //   ))))
-  //   else $error("[ASSERTION_ERROR] INT_STAT_W1C_NORMAL: W1C baseline behaviour failed");
-
-  // INT_STAT_W1C_NORMAL — FIXED VERSION
-  // Spec R17: W1C baseline — on an APB write to 0x1C with no simultaneous
-  // hardware event on ANY of the five int_stat sources, the cleared bits
-  // must read back as 0 one cycle later. Bits NOT targeted by PWDATA must
-  // remain unchanged UNLESS a concurrent HW event sets them (which is
-  // covered separately by the RACE assertions).
-  //
-  // Key fixes vs. original:
-  //   1. Added tx_push_dropped to the antecedent guard (it was missing entirely)
-  //   2. Replaced $rose() guards with level checks — RTL evaluates levels,
-  //      not edges, inside always @(posedge PCLK)
-  //   3. Replaced == (exact equality) with a bit-masked check:
-  //      only verify that the W1C-targeted bits are actually cleared.
-  //      Untargeted bits may be set by concurrent HW and that is legal.
-
-  //!! FIX INTERRUPT
-
   INT_STAT_W1C_NORMAL :
-  assert property (@(posedge PCLK) disable iff (!PRESETn) (
-  // APB ACCESS phase: write to INT_STAT address
-  (PSEL & PENABLE & PWRITE) && (PADDR == 8'h1C)
-
-  // FIX 1 + FIX 2: guard ALL five hardware event conditions using the
-  // exact same level-based compound expressions the RTL uses, not $rose().
-
-  // Guard: TRANSFER_DONE event (bit 4) — RTL: if (transfer_done_pulse)
-  && !transfer_done_pulse
-
-  // Guard: TX_OVF event (bit 2) — RTL: if (tx_push_dropped)
-  // This was entirely missing in the original assertion.
-  && !tx_push_dropped
-
-  // Guard: RX_OVF event (bit 3) — RTL: if (rx_push_valid && rx_full_w)
-  && !(rx_push_valid && rx_full_w)
-
-  // Guard: RX_FULL event (bit 1) — RTL: if (rx_push_valid && !rx_full_w
-  //                                        && rx_count == FIFO_DEPTH-1)
-  && !(rx_push_valid && !rx_full_w && (rx_count == FIFO_DEPTH - 1))
-
-  // Guard: TX_EMPTY event (bit 0) — RTL: if (tx_pop && tx_count == 1)
-  // Original used !($rose(tx_pop)) which misses the compound condition.
-  && !(tx_pop && (tx_count == 1))) |=>
-  // FIX 3: Weaker, correct consequent.
-  // Only verify that the bits targeted by PWDATA are cleared.
-  // Bits not targeted may be set by hardware events firing on the
-  // consequent clock (one cycle after ACCESS) — that is legal RTL
-  // behaviour and must not cause a false assertion failure.
-  ((int_stat & $past(
+  assert property (
+    @(posedge PCLK) disable iff (!PRESETn)
+    (  (PSEL & PENABLE & PWRITE)
+     && (PADDR == 8'h1C)
+     && !($rose(
+      transfer_done_pulse
+  )) && !($rose(
+      rx_push_valid
+  )) && !($rose(
+      tx_pop
+  ))) |=> (int_stat == ($past(
+      int_stat
+  ) & ~$past(
       PWDATA[4:0]
-  )) == 5'b0))
-  else
-    $error(
-        "[ASSERTION_ERROR] INT_STAT_W1C_NORMAL: W1C baseline behaviour failed — ",
-        "int_stat=%05b past_int_stat=%05b past_PWDATA[4:0]=%05b",
-        int_stat,
-        $past(
-            int_stat
-        ),
-        $past(
-            PWDATA[4:0]
-        )
-    );
+  ))))
+  else $error("[ASSERTION_ERROR] INT_STAT_W1C_NORMAL: W1C baseline behaviour failed");
+
+
 
   // INT_STAT_W1C_RACE_RX_OVF  (bit 3 — RX overflow)
   // Spec 18: HW event wins — if rx_push_valid rises (RX FIFO write)
