@@ -33,7 +33,7 @@ localparam int CLK_DIV_SS_DISABLE = 32'h0000_0000;
 
 class rand_div_generator;
   rand int div_val;
-  constraint range_c {div_val inside {[1025 : 4096]};}
+  constraint range_c {div_val inside {[0 : 65535]};}  // Random bit over the full range
 endclass
 
 class clk_div_corner_test;
