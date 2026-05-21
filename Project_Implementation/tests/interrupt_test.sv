@@ -336,6 +336,7 @@ class interrupt_test;
     apb_wr(coverage, APB_TX_DATA, 32'h0000_00AA);  // word 1
     apb_wr(coverage, APB_TX_DATA, 32'h0000_0055);  // word 2
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0002);
     // Discard the unrelated RX_FULL clear — it was irrelevant in the original
     repeat (78) @(posedge tb_top.PCLK);
 
