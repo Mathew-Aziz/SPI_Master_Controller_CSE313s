@@ -38,7 +38,6 @@ class loopback_test;
 
     $display("[INFO] loopback_test: starting");
 
-    // Program div + delay (and sample their dedicated covergroups)
     apb_wr(coverage, APB_CLK_DIV, 32'h0000_0002);
     coverage.sample_clk_div(16'h0002);
 

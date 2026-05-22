@@ -172,7 +172,7 @@ class width_coverage_test;
           apb_wr(coverage, APB_SS_CTRL, 32'h0);
           coverage.sample_ss(4'b0000, 4'b0000);
 
-          // ---------- Extra Test Case A: verify NEXT transfer uses updated CTRL ----------
+          // Extra Test Case to verify NEXT transfer uses updated CTRL 
           if (did_mid_update && (p == 0) && (o == 0)) begin
             // Update BFM to match the CTRL that was written mid-transfer
             tb_top.bfm_width     = next_width_enc;
@@ -217,7 +217,7 @@ class width_coverage_test;
             coverage.sample_ss(4'b0000, 4'b0000);
           end
 
-          // ---------- Extra Test Case B: one loopback corner per width ----------
+          // Extra Test Case to one loopback corner per width
           if ((p == 0) && (o == 0)) begin
             // Enable loopback for one transfer to ensure width honored in LOOPBACK
             ctrl_word[5] = 1'b1;  // LOOPBACK=1

@@ -7,9 +7,7 @@
 
 class sanity_test;
 
-  // -------------------------------------------------------------------------
-  // Class-scope APB wrappers: BFM + coverage sampling (R1/R22)
-  // -------------------------------------------------------------------------
+
   static task automatic apb_wr(ref spi_coverage_col coverage, input bit [7:0] addr,
                                input bit [31:0] data);
     tb_top.u_apb_bfm.apb_write(addr, data);
