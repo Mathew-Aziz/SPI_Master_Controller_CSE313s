@@ -496,11 +496,12 @@ class interrupt_test;
     end
 
     // 5. Read INT_STAT — closes cp_rx_full_irq and cp_rx_full_masked
-    apb_rd(coverage, APB_INT_STAT, rd);
-    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010));
-    if (tb_top.spi.cb_mon.irq != 1'b1)
-      ref_model.checker_error("Interrupt test", "RX_FULL IRQ not asserted when RX_FULL condition met");
-
+    repeat(2)begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b00010));
+      if (tb_top.spi.cb_mon.irq != 1'b1)
+        ref_model.checker_error("Interrupt test", "RX_FULL IRQ not asserted when RX_FULL condition met");
+    end
     //W1C test
     apb_rd(coverage, APB_RX_DATA, rd);
 
@@ -538,10 +539,13 @@ class interrupt_test;
     apb_wr(coverage, APB_INT_EN, 32'h0000_0008);
 
     // 7. Sample again — closes cp_rx_ovf_irq and cp_rx_ovf_masked
-    apb_rd(coverage, APB_INT_STAT, rd);
-    coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b01000));
-    if (tb_top.spi.cb_mon.irq != 1'b1)
-      ref_model.checker_error("Interrupt test", "RX_OVF IRQ not asserted when RX_OVF condition met");
+    repeat(2)begin
+      apb_rd(coverage, APB_INT_STAT, rd);
+      coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b01000));
+      coverage.sample_overflow(.tx_ovf(1'b0), .rx_ovf(1'b1), .rx_empty_rd(1'b0));
+      if (tb_top.spi.cb_mon.irq != 1'b1)
+        ref_model.checker_error("Interrupt test", "RX_OVF IRQ not asserted when RX_OVF condition met");
+    end
 
     //W1C test
     apb_wr(coverage, APB_INT_STAT, 32'h0000_0008);
