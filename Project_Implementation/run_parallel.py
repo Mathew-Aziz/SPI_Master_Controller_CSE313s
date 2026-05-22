@@ -11,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Defaults (mirror the Makefile)
 # ---------------------------------------------------------------------------
-DEFAULT_SEEDS = list(range(1, 2))          # seeds 1-10
+DEFAULT_SEEDS = list(range(1, 4))          # seeds 1-10
 MAX_WORKERS   = 10                           # 10 parallel jobs
 BUILD_DIR     = Path("build")
 
