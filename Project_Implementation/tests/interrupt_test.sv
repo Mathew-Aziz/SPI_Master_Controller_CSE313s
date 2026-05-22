@@ -19,24 +19,18 @@ class interrupt_test;
   endtask
 
   // ===========================================================================
-  // quiesce_dut
+  // idle_dut
   // ---------------------------------------------------------------------------
-  // Brings the DUT to a fully idle state before any W1C write that is intended
-  // as a baseline (non-race) check, so that INT_STAT_W1C_NORMAL's antecedent
-  // is guaranteed to be satisfiable (all hardware event signals at 0).
-  //
-  // Steps performed:
-  //   1. Deassert SS — prevents any new transfer from starting.
-  //   2. Poll STATUS until BUSY=0 AND TX_EMPTY=1 — all in-flight transfers
-  //      have completed and the core is in S_IDLE.
-  //   3. Drain the RX FIFO — prevents rx_push_valid from being re-triggered
-  //      by a stale full condition on a subsequent transfer.
+  // Brings the DUT to a fully idle state before any W1C write to prevent race condition
+  // IDLE conditions:
+  //   1. Deassert SS to prevents any new transfer from starting.
+  //   2. Poll STATUS until BUSY=0 AND TX_EMPTY=1 
+  //   3. Drain the RX FIFO 
   //   4. Wait 3 extra PCLK cycles — guarantees that all registered one-cycle
   //      pulses (transfer_done_pulse, tx_pop, rx_push_valid), which are
-  //      cleared to 0 by default every clock cycle in the RTL, have returned
-  //      to 0 before the W1C write's SETUP phase.
+  //      cleared to 0 by default every clock cycle
   // ===========================================================================
-  static task automatic quiesce_dut(ref spi_coverage_col coverage, ref spi_ref_model ref_model,
+  static task automatic idle_dut(ref spi_coverage_col coverage, ref spi_ref_model ref_model,
                                     input int max_wait = 10000);
     bit [31:0] rd;
     int        wc;
@@ -54,7 +48,7 @@ class interrupt_test;
 
     if (rd[0] == 1'b1 || rd[2] == 1'b0)
       ref_model.checker_error(
-          "quiesce_dut", $sformatf(
+          "idle_dut", $sformatf(
           "timeout after %0d cycles: DUT did not reach idle (STATUS=0x%08h)", wc, rd));
 
     // Step 3: drain RX FIFO completely — read until RX_EMPTY (STATUS[4]) = 1
@@ -65,29 +59,19 @@ class interrupt_test;
     end while (rd[4] == 1'b0);
 
     // Step 4: three extra PCLK cycles so all one-cycle registered pulses
-    // (transfer_done_pulse, tx_pop, rx_push_valid) are guaranteed 0.
-    // These signals are reset to 0 every clock by default in the RTL:
-    //   transfer_done_pulse <= 1'b0;   (spi_core default)
-    //   tx_pop              <= 1'b0;   (spi_core default)
-    //   rx_push_valid       <= 1'b0;   (spi_core default)
-    // After BUSY=0 is observed, one more PCLK is sufficient, but three
-    // cycles is conservative and costs nothing significant.
     repeat (3) @(posedge tb_top.PCLK);
 
   endtask
 
 
   // ===========================================================================
-  // clear_int_stat_safe
+  // clear_int_stat
   // ---------------------------------------------------------------------------
-  // Quiesces the DUT first, then writes 0x1F to INT_STAT (W1C all bits).
-  // Use this instead of a bare apb_wr(APB_INT_STAT,...) wherever the write
-  // is a baseline clear (not a deliberate race scenario), so that the
-  // INT_STAT_W1C_NORMAL SVA antecedent is satisfied at the time of the write.
+  // idles the DUT first, then writes 0x1F to INT_STAT (W1C all bits).
   // ===========================================================================
-  static task automatic clear_int_stat_safe(ref spi_coverage_col coverage,
+  static task automatic clear_int_stat(ref spi_coverage_col coverage,
                                             ref spi_ref_model ref_model);
-    quiesce_dut(coverage, ref_model);
+    idle_dut(coverage, ref_model);
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
   endtask
@@ -154,9 +138,7 @@ class interrupt_test;
     $display("[INTERRUPT_TEST] Starting TRANSFER_DONE IRQ test");
 
     // --- 4a. Enabled + unmasked: IRQ must fire ---
-    // Safe clear: quiesce before every baseline W1C write so that
-    // INT_STAT_W1C_NORMAL SVA antecedent is satisfied.
-    clear_int_stat_safe(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     apb_wr(coverage, APB_INT_EN, 32'h0000_0010);  // enable TRANSFER_DONE only
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
@@ -183,8 +165,8 @@ class interrupt_test;
                           .w1c_race_mask(5'b0));
     end
 
-    // W1C clear — quiesce first so INT_STAT_W1C_NORMAL sees no HW events
-    quiesce_dut(coverage, ref_model);
+    // W1C clear — idle first so INT_STAT_W1C_NORMAL sees no HW events
+    idle_dut(coverage, ref_model);
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b10000), .w1c_mask(5'b10000),
                         .w1c_race_mask(5'b0));
@@ -200,7 +182,7 @@ class interrupt_test;
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
     // Safe clear before the masked transfer
-    clear_int_stat_safe(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     apb_wr(coverage, APB_TX_DATA, val);
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
@@ -211,10 +193,10 @@ class interrupt_test;
       if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
     end
 
-    // Deassert SS, then quiesce before reading INT_STAT
+    // Deassert SS, then idle before reading INT_STAT
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
     coverage.sample_ss(4'b0000, 4'b0000);
-    quiesce_dut(coverage, ref_model);
+    idle_dut(coverage, ref_model);
 
     if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TRANSFER_DONE IRQ asserted despite being masked");
@@ -225,13 +207,8 @@ class interrupt_test;
       coverage.sample_irq(.int_stat(rd[4:0]), .int_en(5'b0), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
     end
 
-    // --- 4c. W1C Race (deterministic) ---
-    // The race write is intentionally concurrent with transfer_done_pulse.
-    // INT_STAT_W1C_NORMAL antecedent will be FALSE here
-    // (!transfer_done_pulse = FALSE), so the NORMAL assertion is correctly
-    // excluded. INT_STAT_W1C_RACE_XFER_DONE fires instead.
-    // We quiesce BEFORE setting up the race to ensure a clean INT_STAT baseline.
-    clear_int_stat_safe(coverage, ref_model);
+    // W1C race
+    clear_int_stat(coverage, ref_model);
 
     apb_wr(coverage, APB_TX_DATA, 32'h0000_00AA);  // word 1
     apb_wr(coverage, APB_TX_DATA, 32'h0000_0055);  // word 2 — keeps BUSY=1 after word 1
@@ -244,13 +221,13 @@ class interrupt_test;
 
     check_race(coverage, ref_model, "TRANSFER_DONE", 4);
 
-    // Drain word 2, then fully quiesce before next sub-test
+    // Drain word 2, then fully idle before next sub-test
     repeat (5000) begin
       apb_rd(coverage, APB_STATUS, rd);
       if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
     end
-    quiesce_dut(coverage, ref_model);
-    clear_int_stat_safe(coverage, ref_model);
+    idle_dut(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
 
     // =======================================================================
@@ -259,7 +236,7 @@ class interrupt_test;
     $display("[INTERRUPT_TEST] Starting TX_EMPTY IRQ test");
 
     // --- 0a. Enabled + unmasked ---
-    clear_int_stat_safe(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     apb_wr(coverage, APB_INT_EN, 32'h0000_0001);  // enable TX_EMPTY only
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
@@ -288,8 +265,8 @@ class interrupt_test;
                           .w1c_race_mask(5'b0));
     end
 
-    // W1C clear — quiesce first
-    quiesce_dut(coverage, ref_model);
+    // W1C clear — idle first
+    idle_dut(coverage, ref_model);
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00001), .w1c_mask(5'b11111),
                         .w1c_race_mask(5'b0));
@@ -319,7 +296,7 @@ class interrupt_test;
 
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
     coverage.sample_ss(4'b0000, 4'b0000);
-    quiesce_dut(coverage, ref_model);
+    idle_dut(coverage, ref_model);
 
     if (tb_top.spi.cb_mon.irq == 1'b1)
       ref_model.checker_error("Interrupt test", "TX_EMPTY IRQ asserted despite being masked");
@@ -331,7 +308,7 @@ class interrupt_test;
     end
 
     // --- 0c. W1C Race ---
-    clear_int_stat_safe(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     apb_wr(coverage, APB_TX_DATA, 32'h0000_00AA);  // word 1
     apb_wr(coverage, APB_TX_DATA, 32'h0000_0055);  // word 2
@@ -349,8 +326,8 @@ class interrupt_test;
       apb_rd(coverage, APB_STATUS, rd);
       if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
     end
-    quiesce_dut(coverage, ref_model);
-    clear_int_stat_safe(coverage, ref_model);
+    idle_dut(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     repeat (3) @(posedge tb_top.PCLK);
 
@@ -360,27 +337,22 @@ class interrupt_test;
     // =======================================================================
     $display("[INTERRUPT_TEST] TX_OVF IRQ TEST starting at t=%0t", $time);
 
-    // --- 2a. Enabled + unmasked ---
-    // CRITICAL: SS must be DEASSERTED before filling the FIFO to overflow.
-    // If SS is asserted, the core pops TX words and tx_pop fires during
-    // the overflow writes, making the antecedent of INT_STAT_W1C_NORMAL
-    // unsatisfiable at the subsequent W1C write clock.
-    clear_int_stat_safe(coverage, ref_model);  // also deasserts SS via quiesce
+
+    clear_int_stat(coverage, ref_model);  // also deasserts SS via idle
 
     apb_wr(coverage, APB_INT_EN, 32'h0000_0004);  // enable TX_OVF only
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b0), .w1c_race_mask(5'b0));
 
     // Write exactly 9 words with SS deasserted:
-    //   words 1-8 fill the FIFO (no drop, no tx_push_dropped)
-    //   word  9 triggers tx_push_dropped → sets INT_STAT[TX_OVF]
+    //   words 0-7 fill the FIFO (no drop, no tx_push_dropped)
+    //   word  8 sets INT_STAT[TX_OVF]
     for (int i = 0; i < 9; i++) begin
       val = $urandom() & 8'hFF;
       apb_wr(coverage, APB_TX_DATA, val);
     end
     coverage.sample_overflow(.tx_ovf(1'b1), .rx_ovf(1'b0), .rx_empty_rd(1'b0));
 
-    // After the 9th write, tx_push_dropped has returned to 0 (combinational,
-    // de-asserts immediately when PENABLE deasserts). Wait 3 cycles to be safe.
+    // After the 9th write Wait 3 cycles to be safe.
     repeat (3) @(posedge tb_top.PCLK);
 
     repeat (2) begin
@@ -394,10 +366,7 @@ class interrupt_test;
       ref_model.checker_error("Interrupt test",
                               "TX_OVF IRQ not asserted when TX_OVF condition met");
 
-    // W1C clear — tx_push_dropped is 0 (SS deasserted, no APB write to TX_DATA
-    // in progress), so INT_STAT_W1C_NORMAL antecedent is satisfied here.
-    // No quiesce needed — SS is already deasserted and no transfer is running.
-    // The 3-cycle wait above ensures all pulses are 0.
+    // W1C clear
     apb_wr(coverage, APB_INT_STAT, 32'h0000_0004);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b00100), .w1c_mask(5'b00100),
                         .w1c_race_mask(5'b0));
@@ -423,11 +392,11 @@ class interrupt_test;
     if (rd[0] != 1'b0 || rd[2] != 1'b1)
       $display("[INTERRUPT_TEST] WARNING: TX drain did not complete (STATUS=0x%08h)", rd);
 
-    quiesce_dut(coverage, ref_model);
-    clear_int_stat_safe(coverage, ref_model);
+    idle_dut(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
     // --- 2b. Masked: INT_STAT must capture TX_OVF, IRQ must stay low ---
-    // Fill to overflow again, SS still deasserted after quiesce
+    // Fill to overflow again, SS still deasserted after idle
     for (int i = 0; i <= 8; i++) begin
       val = $urandom() & 8'hFF;
       apb_wr(coverage, APB_TX_DATA, 32'(i));
@@ -449,15 +418,15 @@ class interrupt_test;
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
     coverage.sample_irq(.int_stat(5'b0), .int_en(5'b0), .w1c_mask(5'b11111), .w1c_race_mask(5'b0));
 
-    // Drain TX FIFO and fully quiesce before RX section
+    // Drain TX FIFO and fully idle before RX section
     apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
     coverage.sample_ss(4'b0001, 4'b0000);
     repeat (5000) begin
       apb_rd(coverage, APB_STATUS, rd);
       if (rd[0] == 1'b0 && rd[2] == 1'b1) break;
     end
-    quiesce_dut(coverage, ref_model);
-    clear_int_stat_safe(coverage, ref_model);
+    idle_dut(coverage, ref_model);
+    clear_int_stat(coverage, ref_model);
 
 
     // =======================================================================
@@ -587,7 +556,7 @@ class interrupt_test;
       if (rd[4] == 1'b0) apb_rd(coverage, APB_RX_DATA, rd);
     end while (rd[4] == 1'b0);
 
-    quiesce_dut(coverage, ref_model);
+    idle_dut(coverage, ref_model);
 
     // W1C clear — DUT is fully idle here, so INT_STAT_W1C_NORMAL passes.
     apb_wr(coverage, APB_INT_STAT, 32'h0000_001F);
