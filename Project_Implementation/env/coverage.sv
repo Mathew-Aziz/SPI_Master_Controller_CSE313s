@@ -1,12 +1,3 @@
-// =============================================================================
-// coverage.sv  —  SPI Master Functional Coverage
-// =============================================================================
-// Ain Shams University  |  Digital Design Verification  |  Spring 2026
-//
-// Instantiated once in tb_top. Tests call the sample_*() tasks after each
-// relevant event to record what scenarios were exercised.
-// =============================================================================
-
 `ifndef SPI_COVERAGE_COL_SV
 `define SPI_COVERAGE_COL_SV 
 
@@ -19,14 +10,14 @@ class spi_coverage_col;
   // SPI transfer configuration
   bit [ 1:0] cv_mode;
   bit        cv_lsb_first;
-  bit [ 1:0] cv_width;
+  bit [ 1:0] cv_width; //
   bit        cv_loopback;
 
   // APB register access
   bit [ 7:0] cv_addr;
   bit        cv_is_write;
   bit        cv_readback;
-  bit [31:0] cv_last_written[bit                                            [7:0]];
+  bit [31:0] cv_last_written[bit[7:0]];
 
   // Reset check
   bit        cv_rst_val_ok;
@@ -69,21 +60,14 @@ class spi_coverage_col;
   // BUSY flag
   bit        cv_busy;
 
-
-  // =========================================================================
-  // MANDATORY covergroups
-  // =========================================================================
-
-
-  // -------------------------------------------------------------------------
-  // cg_spi_cfg  —  R4, R5, R6, R25  [MANDATORY]
+  // cg_spi_cfg  —  R4, R5, R6, R25  
   // 4 SPI modes x 3 transfer widths x 2 bit orders = 24 combinations
-  // -------------------------------------------------------------------------
   covergroup cg_spi_cfg;
-    option.per_instance = 1;
-
     cp_mode: coverpoint cv_mode {
-      bins mode0 = {2'b00}; bins mode1 = {2'b01}; bins mode2 = {2'b10}; bins mode3 = {2'b11};
+      bins mode0 = {2'b00};
+      bins mode1 = {2'b01};
+      bins mode2 = {2'b10};
+      bins mode3 = {2'b11};
     }
 
     cp_width: coverpoint cv_width {bins w8 = {2'b00}; bins w16 = {2'b01}; bins w32 = {2'b10};}
@@ -92,17 +76,11 @@ class spi_coverage_col;
 
     // All 24 mode/width/bit-order combinations
     cx_full: cross cp_mode, cp_width, cp_lsb;
-
   endgroup
 
-
-  // -------------------------------------------------------------------------
-  // cg_clk_div  —  R8, R24  [MANDATORY]
+  // cg_clk_div  —  R8, R24  
   // Clock divider corners: 0 (fastest), specific values, and max
-  // -------------------------------------------------------------------------
   covergroup cg_clk_div;
-    option.per_instance = 1;
-
     cp_div: coverpoint cv_clk_div {
       bins div0 = {16'h0000};  // PCLK/2 — fastest SCLK
       bins div1 = {16'h0001};
@@ -113,54 +91,48 @@ class spi_coverage_col;
       bins div_mid = {[16'h0004 : 16'hFFFE]};  // general range
       bins div_max = {16'hFFFF};  // slowest SCLK
     }
-
   endgroup
 
 
-  // -------------------------------------------------------------------------
-  // cg_fifo_occ  —  R9, R10, R11, R12  [MANDATORY]
-  // TX and RX FIFO occupancy: empty, 1 entry, mid (4), near-full (7), full
-  // -------------------------------------------------------------------------
+  // cg_fifo_occ  —  R9, R10, R11, R12  
+  // TX and RX FIFO occupancy: empty, 1 entry, mid (4), full
   covergroup cg_fifo_occ;
-    option.per_instance = 1;
-
     cp_tx: coverpoint cv_tx_occ {
-      bins tx_empty = {0}; bins tx_1 = {1}; bins tx_mid = {4}; bins tx_7 = {7}; bins tx_full = {8};
+      bins tx_empty = {0};
+      bins tx_1 = {1};
+      bins tx_mid = {4};
+      bins tx_7 = {7};
+      bins tx_full = {8};
     }
 
     cp_rx: coverpoint cv_rx_occ {
       bins rx_empty = {0}; bins rx_1 = {1}; bins rx_mid = {4}; bins rx_7 = {7}; bins rx_full = {8};
     }
-
   endgroup
 
-
-  // -------------------------------------------------------------------------
-  // cg_irq  —  R16, R17, R18  [MANDATORY]
+  // cg_irq  —  R16, R17, R18 
   // Each of the 5 interrupt sources: fires, captured while masked, cleared
-  // -------------------------------------------------------------------------
   covergroup cg_irq;
-    option.per_instance = 1;
+ 
 
-    // --- Each source must assert at least once ---
+    // Each source must assert at least once 
     cp_tx_empty_irq: coverpoint cv_int_stat[0] {
       bins fired = {1'b1};
-    }
+    }   //The moment two sources fire at the same time
     cp_rx_full_irq: coverpoint cv_int_stat[1] {bins fired = {1'b1};}
     cp_tx_ovf_irq: coverpoint cv_int_stat[2] {bins fired = {1'b1};}
     cp_rx_ovf_irq: coverpoint cv_int_stat[3] {bins fired = {1'b1};}
     cp_done_irq: coverpoint cv_int_stat[4] {bins fired = {1'b1};}
 
-    // --- INT_EN masking: IRQ = |(INT_STAT & INT_EN) ---
+    // INT_EN masking: IRQ = |(INT_STAT & INT_EN) 
     cp_int_en: coverpoint cv_int_en {
       bins all_on = {5'b11111};  // all sources route to IRQ pin
       bins all_off = {5'b00000};  // IRQ always low regardless of events
       bins partial = {[5'b00001 : 5'b11110]};  // selective routing
     }
 
-    // --- R16: INT_EN must not suppress INT_STAT capture ---
+    // R16: INT_EN must not suppress INT_STAT capture 
     // Each bin fires when that source was recorded in INT_STAT
-    // while its INT_EN bit was 0, proving the latch is independent.
     cp_tx_empty_masked: coverpoint cv_masked_stat[0] {
       bins captured = {1'b1};
     }
@@ -169,7 +141,7 @@ class spi_coverage_col;
     cp_rx_ovf_masked: coverpoint cv_masked_stat[3] {bins captured = {1'b1};}
     cp_done_masked: coverpoint cv_masked_stat[4] {bins captured = {1'b1};}
 
-    // --- R17: W1C — each source cleared by writing 1 to its bit ---
+    // R17: W1C — each source cleared by writing 1 to its bit 
     cp_w1c_tx_empty: coverpoint cv_w1c_mask[0] {
       bins cleared = {1'b1};
     }
@@ -178,85 +150,10 @@ class spi_coverage_col;
     cp_w1c_rx_ovf: coverpoint cv_w1c_mask[3] {bins cleared = {1'b1};}
     cp_w1c_done: coverpoint cv_w1c_mask[4] {bins cleared = {1'b1};}
 
-  endgroup
 
-
-  // -------------------------------------------------------------------------
-  // cg_loopback  —  R19  [MANDATORY]
-  // Loopback routes MOSI back to RX; MISO is ignored
-  // -------------------------------------------------------------------------
-  covergroup cg_loopback;
-    option.per_instance = 1;
-
-    cp_lb: coverpoint cv_loopback {
-      bins off = {1'b0}; bins on = {1'b1};  // at least one loopback transfer required
-    }
-
-    cp_width: coverpoint cv_width {bins w8 = {2'b00}; bins w16 = {2'b01}; bins w32 = {2'b10};}
-
-    // Loopback must work at all three transfer widths
-    cx_lb_width: cross cp_lb, cp_width{
-      ignore_bins off_any = binsof (cp_lb.off);
-    }
-
-  endgroup
-
-
-  // -------------------------------------------------------------------------
-  // cg_delay  —  R21  [MANDATORY]
-  // Inter-transfer gap delay: 0 (none), 1 (minimum), large value
-  // -------------------------------------------------------------------------
-  covergroup cg_delay;
-    option.per_instance = 1;
-
-    cp_delay: coverpoint cv_delay {
-      bins d0 = {8'h00};  // no delay
-      bins d1 = {8'h01};  // minimum gap
-      bins d2_127 = {[8'h02 : 8'h7F]};
-      bins d128_255 = {[8'h80 : 8'hFF]};  // large gap
-    }
-
-  endgroup
-
-
-  // -------------------------------------------------------------------------
-  // cg_rst  —  R2  [MANDATORY]
-  // Every register must read back its spec-defined reset value after PRESETn
-  // -------------------------------------------------------------------------
-  covergroup cg_rst;
-    option.per_instance = 1;
-
-    cp_addr: coverpoint cv_addr {
-      bins ctrl = {8'h00};
-      bins status = {8'h04};
-      bins tx_data = {8'h08};
-      bins rx_data = {8'h0C};
-      bins clk_div = {8'h10};
-      bins ss_ctrl = {8'h14};
-      bins int_en = {8'h18};
-      bins int_stat = {8'h1C};
-      bins delay_r = {8'h20};
-    }
-
-    cp_rst_ok: coverpoint cv_rst_val_ok {bins correct = {1'b1};}
-
-    cx_reg_rst: cross cp_addr, cp_rst_ok;
-
-  endgroup
-
-
-  // =========================================================================
-  // ADDITIONAL covergroups  (bug-detection depth beyond the mandatory gate)
-  // =========================================================================
-
-
-  // -------------------------------------------------------------------------
-  // cg_apb_reg  —  R1  [ADDITIONAL]
+  // cg_apb_reg  —  R1  
   // Every register is written then read back with matching data
-  // -------------------------------------------------------------------------
   covergroup cg_apb_reg;
-    option.per_instance = 1;
-
     cp_addr: coverpoint cv_addr {
       bins ctrl = {8'h00};
       bins status = {8'h04};
@@ -272,17 +169,59 @@ class spi_coverage_col;
     cp_readback: coverpoint cv_readback {bins match = {1'b1};}
 
     cx_reg_readback: cross cp_addr, cp_readback;
+  endgroup
 
+  endgroup
+  // cg_rst  —  R2  
+  // Every register must read back its spec-defined reset value after PRESETn
+  covergroup cg_rst;
+    cp_addr: coverpoint cv_addr {
+      bins ctrl = {8'h00};
+      bins status = {8'h04};
+      bins tx_data = {8'h08};
+      bins rx_data = {8'h0C};
+      bins clk_div = {8'h10};
+      bins ss_ctrl = {8'h14};
+      bins int_en = {8'h18};
+      bins int_stat = {8'h1C};
+      bins delay_r = {8'h20};
+    }
+    cp_rst_ok: coverpoint cv_rst_val_ok {bins correct = {1'b1};}
+    cx_reg_rst: cross cp_addr, cp_rst_ok;
   endgroup
 
 
-  // -------------------------------------------------------------------------
-  // cg_overflow  —  R13, R14, R15  [ADDITIONAL]
-  // Error conditions: write to full TX, push to full RX, read from empty RX
-  // -------------------------------------------------------------------------
-  covergroup cg_overflow;
-    option.per_instance = 1;
+  // cg_delay  —  R21  
+  // Inter-transfer gap delay: 0 (none), 1 (minimum), large value
+  covergroup cg_delay;
+    cp_delay: coverpoint cv_delay {
+      bins d0 = {8'h00};  // no delay
+      bins d1 = {8'h01};  // minimum gap
+      bins d2_127 = {[8'h02 : 8'h7F]};
+      bins d128_255 = {[8'h80 : 8'hFF]};  // large gap
+    }
+  endgroup
 
+
+  // cg_loopback  —  R19  
+  // Loopback routes MOSI back to RX; MISO is ignored
+  covergroup cg_loopback;
+    cp_lb: coverpoint cv_loopback {
+      bins off = {1'b0}; bins on = {1'b1};  // at least one loopback transfer required
+    }
+
+    cp_width: coverpoint cv_width {bins w8 = {2'b00}; bins w16 = {2'b01}; bins w32 = {2'b10};}
+
+    // Loopback must work at all three transfer widths
+    cx_lb_width: cross cp_lb, cp_width{
+      ignore_bins off_any = binsof (cp_lb.off);
+    }
+  endgroup
+
+
+  // cg_overflow  —  R13, R14, R15 
+  // Error conditions: write to full TX, push to full RX, read from empty RX
+  covergroup cg_overflow;
     cp_tx_ovf: coverpoint cv_tx_ovf {bins no_ovf = {1'b0}; bins ovf = {1'b1};}
 
     cp_rx_ovf: coverpoint cv_rx_ovf {bins no_ovf = {1'b0}; bins ovf = {1'b1};}
@@ -290,17 +229,12 @@ class spi_coverage_col;
     cp_rx_empty_read: coverpoint cv_rx_empty_read {
       bins no_empty_rd = {1'b0}; bins empty_rd = {1'b1};
     }
-
   endgroup
 
 
-  // -------------------------------------------------------------------------
-  // cg_ctrl_en  —  R3  [ADDITIONAL]
+  // cg_ctrl_en  —  R3  
   // When EN=0: FIFOs must be empty, SCLK at idle, SS_n forced high
-  // -------------------------------------------------------------------------
   covergroup cg_ctrl_en;
-    option.per_instance = 1;
-
     cp_en: coverpoint cv_ctrl_en {bins enabled = {1'b1}; bins disabled = {1'b0};}
 
     // TX FIFO cleared when EN deasserts
@@ -327,17 +261,12 @@ class spi_coverage_col;
     cx_en0_rx: cross cp_en, cp_rx_empty_en0{ignore_bins en1 = binsof (cp_en.enabled);}
     cx_en0_sclk: cross cp_en, cp_sclk_idle{ignore_bins en1 = binsof (cp_en.enabled);}
     cx_en0_ss: cross cp_en, cp_ss_high{ignore_bins en1 = binsof (cp_en.enabled);}
-
   endgroup
 
 
-  // -------------------------------------------------------------------------
-  // cg_ss  —  R20  [ADDITIONAL]
+  // cg_ss  —  R20  
   // Each slave-select lane selected individually at least once
-  // -------------------------------------------------------------------------
   covergroup cg_ss;
-    option.per_instance = 1;
-
     cp_ss_en: coverpoint cv_ss_en {
       bins ss0 = {4'b0001};
       bins ss1 = {4'b0010};
@@ -345,37 +274,28 @@ class spi_coverage_col;
       bins ss3 = {4'b1000};
       bins none = {4'b0000};
     }
-
   endgroup
 
-
-  // -------------------------------------------------------------------------
-  // cg_reserved  —  R23  [ADDITIONAL]
+  // cg_reserved  —  R23  
   // Reserved offsets must silently read 0 and ignore writes (no PSLVERR)
-  // -------------------------------------------------------------------------
   covergroup cg_reserved;
-    option.per_instance = 1;
-
     cp_addr: coverpoint cv_reserved_addr {
       bins res_24 = {8'h24}; bins res_28 = {8'h28}; bins res_other = {[8'h2C : 8'hFF]};
     }
 
-    cp_rw: coverpoint cv_reserved_is_write {bins read = {1'b0}; bins write = {1'b1};}
+    cp_rw: coverpoint cv_reserved_is_write {
+     bins read = {1'b0};
+     bins write = {1'b1};}
 
     cx_reserved: cross cp_addr, cp_rw;
-
   endgroup
 
-
-  // -------------------------------------------------------------------------
-  // cg_busy  —  R7  [ADDITIONAL]
+  // cg_busy  —  R7    
   // STATUS.BUSY observed high during an active transfer
-  // -------------------------------------------------------------------------
   covergroup cg_busy;
-    option.per_instance = 1;
-
-    cp_busy: coverpoint cv_busy {bins idle = {1'b0}; bins active = {1'b1};}
-
+    cp_busy: coverpoint cv_busy {
+      bins idle = {1'b0};
+      bins active = {1'b1};}
   endgroup
 
 
@@ -383,7 +303,6 @@ class spi_coverage_col;
   // Constructor
   // =========================================================================
   function new();
-    // Mandatory
     cg_spi_cfg  = new();
     cg_clk_div  = new();
     cg_fifo_occ = new();
@@ -391,7 +310,6 @@ class spi_coverage_col;
     cg_loopback = new();
     cg_delay    = new();
     cg_rst      = new();
-    // Additional
     cg_apb_reg  = new();
     cg_overflow = new();
     cg_ctrl_en  = new();
@@ -404,7 +322,6 @@ class spi_coverage_col;
   // =========================================================================
   // Sample tasks
   // =========================================================================
-
 
   // Call after writing CTRL (before starting a transfer)
   // Covers cg_spi_cfg, cg_loopback
