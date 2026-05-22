@@ -552,6 +552,20 @@ class interrupt_test;
     if(rd[3] == 1'b1)
       ref_model.checker_error("Interrupt test", "RX_OVF INT_STAT bit not cleared after W1C");
 
+    //W1C Race
+    apb_wr(coverage, APB_TX_DATA, 32'h0000_00EE);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0001);
+    coverage.sample_ss(4'b0001, 4'b0000);
+    repeat(32) @(posedge tb_top.PCLK);  // wait for any pulses to settle
+    apb_wr(coverage, APB_INT_STAT, 32'h0000_0008);
+    coverage.sample_irq(.int_stat(5'b1000), .int_en(5'b1000), .w1c_mask(5'b01000),
+                        .w1c_race_mask(5'b1));
+    check_race(coverage, ref_model, "RX_FULL", 1);
+    do apb_rd(coverage, APB_STATUS, rd); while (rd[0]);
+    apb_wr(coverage, APB_SS_CTRL, 32'h0000_0000);
+    coverage.sample_ss(4'b0000, 4'b0000);
+
+
     // 8. Enable all interrupts then sample — closes cp_int_en all_on
     apb_wr(coverage, APB_INT_EN, 32'h0000_001F);
     apb_rd(coverage, APB_INT_STAT, rd);
