@@ -10,14 +10,14 @@ class spi_coverage_col;
   // SPI transfer configuration
   bit [ 1:0] cv_mode;
   bit        cv_lsb_first;
-  bit [ 1:0] cv_width; //
+  bit [ 1:0] cv_width;
   bit        cv_loopback;
 
   // APB register access
   bit [ 7:0] cv_addr;
   bit        cv_is_write;
   bit        cv_readback;
-  bit [31:0] cv_last_written[bit[7:0]];
+  bit [31:0] cv_last_written[bit   [7:0]];
 
   // Reset check
   bit        cv_rst_val_ok;
@@ -44,8 +44,8 @@ class spi_coverage_col;
   // Interrupts
   bit [ 4:0] cv_int_stat;
   bit [ 4:0] cv_int_en;
-  bit [ 4:0] cv_masked_stat;  // int_stat & ~int_en: bits set while masked
-  bit [ 4:0] cv_w1c_mask;  // which INT_STAT bits were written-1 (W1C)
+  bit [ 4:0] cv_masked_stat;
+  bit [ 4:0] cv_w1c_mask;
 
   // Slave select
   bit [ 3:0] cv_ss_en;
@@ -64,10 +64,7 @@ class spi_coverage_col;
   // 4 SPI modes x 3 transfer widths x 2 bit orders = 24 combinations
   covergroup cg_spi_cfg;
     cp_mode: coverpoint cv_mode {
-      bins mode0 = {2'b00};
-      bins mode1 = {2'b01};
-      bins mode2 = {2'b10};
-      bins mode3 = {2'b11};
+      bins mode0 = {2'b00}; bins mode1 = {2'b01}; bins mode2 = {2'b10}; bins mode3 = {2'b11};
     }
 
     cp_width: coverpoint cv_width {bins w8 = {2'b00}; bins w16 = {2'b01}; bins w32 = {2'b10};}
@@ -98,11 +95,7 @@ class spi_coverage_col;
   // TX and RX FIFO occupancy: empty, 1 entry, mid (4), full
   covergroup cg_fifo_occ;
     cp_tx: coverpoint cv_tx_occ {
-      bins tx_empty = {0};
-      bins tx_1 = {1};
-      bins tx_mid = {4};
-      bins tx_7 = {7};
-      bins tx_full = {8};
+      bins tx_empty = {0}; bins tx_1 = {1}; bins tx_mid = {4}; bins tx_7 = {7}; bins tx_full = {8};
     }
 
     cp_rx: coverpoint cv_rx_occ {
@@ -113,12 +106,12 @@ class spi_coverage_col;
   // cg_irq  —  R16, R17, R18 
   // Each of the 5 interrupt sources: fires, captured while masked, cleared
   covergroup cg_irq;
- 
+
 
     // Each source must assert at least once 
     cp_tx_empty_irq: coverpoint cv_int_stat[0] {
       bins fired = {1'b1};
-    }   //The moment two sources fire at the same time
+    }  //The moment two sources fire at the same time
     cp_rx_full_irq: coverpoint cv_int_stat[1] {bins fired = {1'b1};}
     cp_tx_ovf_irq: coverpoint cv_int_stat[2] {bins fired = {1'b1};}
     cp_rx_ovf_irq: coverpoint cv_int_stat[3] {bins fired = {1'b1};}
@@ -150,6 +143,9 @@ class spi_coverage_col;
     cp_w1c_rx_ovf: coverpoint cv_w1c_mask[3] {bins cleared = {1'b1};}
     cp_w1c_done: coverpoint cv_w1c_mask[4] {bins cleared = {1'b1};}
 
+  endgroup
+
+
 
   // cg_apb_reg  —  R1  
   // Every register is written then read back with matching data
@@ -171,7 +167,7 @@ class spi_coverage_col;
     cx_reg_readback: cross cp_addr, cp_readback;
   endgroup
 
-  endgroup
+  // cg_apb_reg closed above
   // cg_rst  —  R2  
   // Every register must read back its spec-defined reset value after PRESETn
   covergroup cg_rst;
@@ -283,9 +279,7 @@ class spi_coverage_col;
       bins res_24 = {8'h24}; bins res_28 = {8'h28}; bins res_other = {[8'h2C : 8'hFF]};
     }
 
-    cp_rw: coverpoint cv_reserved_is_write {
-     bins read = {1'b0};
-     bins write = {1'b1};}
+    cp_rw: coverpoint cv_reserved_is_write {bins read = {1'b0}; bins write = {1'b1};}
 
     cx_reserved: cross cp_addr, cp_rw;
   endgroup
@@ -293,9 +287,7 @@ class spi_coverage_col;
   // cg_busy  —  R7    
   // STATUS.BUSY observed high during an active transfer
   covergroup cg_busy;
-    cp_busy: coverpoint cv_busy {
-      bins idle = {1'b0};
-      bins active = {1'b1};}
+    cp_busy: coverpoint cv_busy {bins idle = {1'b0}; bins active = {1'b1};}
   endgroup
 
 
@@ -488,4 +480,4 @@ class spi_coverage_col;
 
 endclass
 
-`endif  // SPI_COVERAGE_COL_SV
+`endif
