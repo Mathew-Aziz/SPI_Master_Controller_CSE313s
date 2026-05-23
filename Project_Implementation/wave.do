@@ -4,7 +4,6 @@ add wave -noupdate /tb_top/PCLK
 add wave -noupdate /tb_top/u_wrap/u_dut/MOSI
 add wave -noupdate /tb_top/u_wrap/u_dut/MISO
 add wave -noupdate /tb_top/u_wrap/u_dut/SS_n
-add wave -noupdate /tb_top/u_wrap/u_dut/IRQ
 add wave -noupdate /tb_top/u_wrap/u_dut/tx_empty
 add wave -noupdate /tb_top/u_wrap/u_dut/tx_pop
 add wave -noupdate /tb_top/u_wrap/u_dut/rx_push_valid
@@ -68,6 +67,7 @@ add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/ss_ctrl_word
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/int_en_word
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/PCLK
 add wave -noupdate -color Gold /tb_top/u_wrap/u_dut/u_regfile/PWDATA
+add wave -noupdate -color Cyan /tb_top/u_wrap/u_dut/IRQ
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/int_stat_word
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/clk_div_word
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/delay_word
@@ -78,10 +78,11 @@ add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/tx_push_accepted
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/tx_push_dropped
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/i
 add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/int_stat_update/next_stat
-add wave -noupdate -expand /tb_top/u_wrap/u_dut/u_regfile/tx_mem
+add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/tx_mem
+add wave -noupdate /tb_top/u_wrap/u_dut/u_regfile/rx_mem
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {1095090 ps} 0}
-quietly wave cursor active 1
+WaveRestoreCursors {{Cursor 1} {1095090 ps} 0} {{Cursor 2} {5045294 ps} 0}
+quietly wave cursor active 2
 configure wave -namecolwidth 340
 configure wave -valuecolwidth 100
 configure wave -justifyvalue left
@@ -96,4 +97,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ns
 update
-WaveRestoreZoom {952322 ps} {1466484 ps}
+WaveRestoreZoom {4706771 ps} {5220933 ps}

@@ -58,3 +58,188 @@ This folder contains the organized **SV-only** project hierarchy for the SPI Mas
 - No SystemVerilog source content is modified by this step.
 - The Makefile in this folder should implement the mandatory grading targets:
   - `compile`, `run`, `regress`, `run_bonus`, `cov`, `clean`
+
+# Parallel SV Regression Runner
+
+A Python utility for running SystemVerilog simulation tests in parallel, with built-in compilation, logging, and coverage reporting support.
+
+---
+
+## Prerequisites & Toolchain Notes
+
+| Tool | Purpose |
+|------|---------|
+| **Python 3.10+** | Required to run the script (uses `match` syntax and modern type hints) |
+| **Git Bash** | Shell environment used to invoke the script on Windows |
+| **Make** | Build system that the script delegates to (`make compile`, `make run`) |
+| **QuestaSim / ModelSim** | The underlying HDL simulator; the script looks for `TEST PASSED` / `TEST FAILED` markers in Questa-style logs |
+| **vcover** | Questa's coverage utility, used to merge `.ucdb` databases and generate a report |
+
+> **Note:** `vcover` and `make` must both be on your system `PATH` so that Git Bash can locate them. If they are installed through the QuestaSim installer, sourcing the tool's environment script (e.g. `questa_sim.sh`) before running is recommended.
+
+---
+
+## How to Run
+
+### 1. Open Git Bash in the project directory
+
+Right-click the project root folder → **Git Bash Here**, or navigate manually:
+
+```bash
+cd /path/to/your/project
+```
+
+### 2. Run the script with compilation
+
+The standard command for a full regression run (compile first, then simulate) is:
+
+```bash
+python run_parallel.py --compile
+```
+
+This will:
+
+1. Execute `make compile` once to build the design.
+2. Spawn up to **10 parallel workers** to run all 11 regression tests.
+3. Write per-job log files to `build/log_<test>_<seed>.log`.
+4. Print a live progress feed and a final summary table.
+5. Merge `.ucdb` coverage databases and generate `coverage_report.txt`.
+
+---
+
+## Common CLI Options
+
+```
+python run_parallel.py [OPTIONS]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--compile` | off | Run `make compile` before launching tests |
+| `--compile-only` | off | Compile and exit without running any tests |
+| `--tests TEST [TEST ...]` | all 11 tests | Specify a subset of tests to run |
+| `--seeds N [N ...]` | `[1]` | One or more random seeds to run per test |
+| `--workers N` | `10` | Maximum number of parallel simulation jobs |
+| `--makefile-dir DIR` | `.` (current dir) | Path to the directory containing the Makefile |
+
+### Examples
+
+Run a single test with two seeds:
+
+```bash
+python run_parallel.py --compile --tests sanity_test --seeds 1 2
+```
+
+Run all tests without recompiling (design already built):
+
+```bash
+python run_parallel.py
+```
+
+Use 4 workers and a custom Makefile location:
+
+```bash
+python run_parallel.py --compile --workers 4 --makefile-dir ./sim
+```
+
+---
+
+## Terminal Output Walkthrough
+
+After running `python run_parallel.py --compile`, the terminal output appears in three phases:
+
+### Phase 1 — Compilation
+
+```
+▶  Compiling project (make compile) …
+✔  Compilation succeeded.
+```
+
+The script runs `make compile` and streams its output directly. A failure here aborts the run immediately.
+
+### Phase 2 — Live Progress Feed
+
+```
+▶  Launching 11 job(s)  (11 test(s) x 1 seed(s))  with 10 parallel worker(s)
+   Seeds  : [1]
+   Tests  : ['sanity_test', 'reg_access_test', ...]
+   Logs → : build/
+
+  [  1/11] ✔ sanity_test  seed=1  (4.2s)  [PASS]
+  [  2/11] ✔ reg_access_test  seed=1  (6.8s)  [PASS]
+  [  3/11] ✗ fifo_stress_test  seed=1  (12.1s)  [FAIL]
+  ...
+```
+
+Each line is printed as a job completes (not in launch order). The counter `[done/total]` tracks overall progress.
+
+### Phase 3 — Timing Summary
+
+```
+  ⏱  Started  : 14:32:05
+  ⏱  Finished : 14:32:51
+  ⏱  Duration : 46.3s
+  ⏱  Speedup  : 3.1x  (would have taken 143s sequentially)
+```
+
+Shows wall-clock time and the parallelism speedup factor compared to running tests one by one.
+
+### Phase 4 — Results Table
+
+```
+=====================================================================
+TEST                    SEED    STATUS      TIME   LOG
+=====================================================================
+✔ sanity_test              1    PASS       4.2s   build/log_sanity_test_1.log
+✗ fifo_stress_test         1    FAIL      12.1s   build/log_fifo_stress_test_1.log
+...
+=====================================================================
+  Total: 11  |  Passed: 10  |  Failed: 1
+=====================================================================
+
+Failed runs:
+
+  • fifo_stress_test  seed=1  →  build/log_fifo_stress_test_1.log
+      ↳ ** Error: Assertion failed at time 1042 ns
+```
+
+For each failing test, up to 5 extracted error/assertion lines from the log are shown inline to give an immediate indication of the failure cause without manually opening the log.
+
+### Phase 5 — Coverage
+
+```
+▶  Merging coverage databases ...
+▶  Generating coverage report ...
+✔  Coverage report saved to: coverage_report.txt
+```
+
+All `.ucdb` files found in the current directory are merged with `vcover merge`, and a detailed report is written to `coverage_report.txt`.
+
+---
+
+## Output Files
+
+| File | Description |
+|------|-------------|
+| `build/log_<test>_<seed>.log` | Full simulator stdout for each job |
+| `build/merged.ucdb` | Merged functional coverage database |
+| `coverage_report.txt` | Human-readable coverage report from `vcover report` |
+
+---
+
+## Pass / Fail Detection Logic
+
+The script does **not** rely solely on the Make exit code. It scans each log for explicit markers in this priority order:
+
+1. **Fail** if log contains: `TEST FAILED`, `** ERROR`, or `ASSERTION FAILED`
+2. **Pass** if log contains: `TEST PASSED`, `** PASS`, or `SIMULATION PASSED`
+3. **Fallback** to the `make run` exit code if no markers are found
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All tests passed (suitable for CI green gate) |
+| `1` | One or more tests failed, or compilation failed |
